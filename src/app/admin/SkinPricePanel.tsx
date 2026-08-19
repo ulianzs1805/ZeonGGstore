@@ -1,0 +1,114 @@
+"use client";
+
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+
+type Role = "DEV" | "NPN1_DEV";
+type Skin = {
+  id: string;
+  name: string;
+  rarity: string;
+  image: string;
+  price: number;
+  effectiveProbability: number;
+  caseCount: number;
+  caseNames: string[];
+  case: { id: string; name: string; slug: string; environment: "SYSTEM" | "TEST"; isActive: boolean };
+};
+
+export default function SkinPricePanel({ role }: { role: Role }) {
+  const [skins, setSkins] = useState<Skin[]>([]);
+  const [maxPrice, setMaxPrice] = useState(role === "DEV" ? 10000 : 100000);
+  const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftPrice, setDraftPrice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const loadSkins = async () => {
+    setLoading(true);
+    setError("");
+    const response = await fetch("/api/admin/skin-prices", { cache: "no-store" });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) setError(data?.error || "Не удалось загрузить скины.");
+    else {
+      setSkins(data.drops ?? []);
+      setMaxPrice(data.policy?.maxPrice ?? maxPrice);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void loadSkins();
+    // The loader is intentionally stable for this one-time panel bootstrap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const visibleSkins = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return skins;
+    return skins.filter((skin) => `${skin.name} ${skin.case.name} ${skin.rarity} ${skin.case.environment}`.toLowerCase().includes(query));
+  }, [search, skins]);
+
+  const startEditing = (skin: Skin) => {
+    setEditingId(skin.id);
+    setDraftPrice(String(skin.price));
+    setMessage("");
+    setError("");
+  };
+
+  const savePrice = async (skin: Skin) => {
+    const price = Number(draftPrice);
+    if (!Number.isInteger(price) || price < 1 || price > maxPrice) {
+      setError(`Введите целое число от 1 до ${maxPrice} Z-Coin.`);
+      return;
+    }
+    setSavingId(skin.id);
+    setError("");
+    setMessage("");
+    const response = await fetch("/api/admin/skin-prices", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dropId: skin.id, price }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) setError(data?.error || "Не удалось изменить цену.");
+    else {
+      setEditingId(null);
+      setMessage(`Цена «${skin.name}» обновлена в ${data.affectedDropCount ?? 0} Drop и ${data.affectedInventoryCount ?? 0} предметах инвентаря.`);
+      await loadSkins();
+    }
+    setSavingId(null);
+  };
+
+  return <div className="space-y-5">
+    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/5 p-4 text-sm text-amber-100">
+      <p className="font-black">Ограниченная настройка стоимости</p>
+      <p className="mt-1 text-xs text-amber-100/70">Ваша роль: {role}. Допустимый диапазон: 1–{maxPrice.toLocaleString("ru-RU")} Z-Coin. Каждое изменение попадает в audit log.</p>
+    </div>
+    <div className="flex flex-wrap gap-3">
+      <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Поиск по скину, кейсу или rarity" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm outline-none focus:border-violet-300/60" />
+      <button type="button" onClick={() => void loadSkins()} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold text-slate-200 hover:border-violet-300/50">Обновить</button>
+    </div>
+    {message && <p className="rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-3 text-sm text-emerald-200">{message}</p>}
+    {error && <p className="rounded-xl border border-red-300/20 bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
+    {loading ? <p className="rounded-xl border border-white/10 p-5 text-sm text-slate-400">Загрузка скинов...</p> : visibleSkins.length === 0 ? <p className="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">Скины не найдены.</p> : <div className="grid gap-3">
+      {visibleSkins.map((skin) => <article key={skin.id} className="grid gap-4 rounded-2xl border border-white/10 bg-black/15 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/20"><Image src={skin.image} alt={skin.name} fill className="object-contain" unoptimized /></div>
+          <div className="min-w-0"><p className="truncate font-black text-white">{skin.name}</p><p className="mt-1 truncate text-xs text-slate-400">{skin.case.name} · {skin.rarity}</p><p className="mt-1 truncate text-[0.65rem] uppercase tracking-[0.14em] text-slate-500">{skin.case.environment} · {skin.case.isActive ? "ACTIVE" : "INACTIVE"} · {skin.caseCount} {skin.caseCount === 1 ? "кейс" : "кейса"}</p></div>
+        </div>
+        <div className="flex items-center justify-between gap-3 md:justify-end">
+          <div className="text-right"><p className="text-xs text-slate-500">Цена · шанс</p><p className="font-black text-violet-200">{skin.price.toLocaleString("ru-RU")} Z</p><p className="text-[0.65rem] text-slate-400">{skin.effectiveProbability.toFixed(2)}%</p></div>
+          <button type="button" onClick={() => startEditing(skin)} className="rounded-xl border border-violet-300/30 px-3 py-2 text-xs font-black text-violet-100 hover:bg-violet-400/10">Изменить цену</button>
+        </div>
+        {editingId === skin.id && <div className="md:col-span-2 rounded-xl border border-violet-300/25 bg-violet-400/5 p-4">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"><label className="text-sm font-bold text-slate-200">Новая цена (1–{maxPrice.toLocaleString("ru-RU")})<input type="number" min="1" max={maxPrice} step="1" value={draftPrice} onChange={(event) => setDraftPrice(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm outline-none focus:border-violet-300/60" /></label><div className="flex gap-2"><button type="button" onClick={() => void savePrice(skin)} disabled={savingId === skin.id} className="rounded-xl bg-violet-500 px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50">{savingId === skin.id ? "Сохранение..." : "Сохранить"}</button><button type="button" onClick={() => setEditingId(null)} className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold text-slate-300">Отмена</button></div></div>
+          <p className="mt-3 text-xs text-slate-500">Preview: {skin.price.toLocaleString("ru-RU")} Z → {Number(draftPrice || 0).toLocaleString("ru-RU")} Z</p>
+        </div>}
+      </article>)}
+    </div>}
+  </div>;
+}

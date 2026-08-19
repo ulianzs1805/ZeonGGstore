@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  TESTER
+  ADMIN
+  DEV
+  NPN1_DEV
+}
+
+enum Environment {
+  SYSTEM
+  TEST
+}
+
+enum ProbabilityMode {
+  MANUAL
+  DYNAMIC
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  name           String?
+  avatar         String?
+  role           Role            @default(USER)
+  createdAt      DateTime        @default(now())
+  balance        Int             @default(0)
+  inventoryItems InventoryItem[]
+  operations     Operation[]
+  transactions   Transaction[]
+  zcoinOperations ZCoinOperation[] @relation("ZCoinTarget")
+  zcoinActions    ZCoinOperation[] @relation("ZCoinActor")
+  supportTickets SupportTicket[]
+  supportMessages SupportMessage[]
+  adminProfile   AdminProfile?
+  devProfile     DevProfile?
+  testerProfile  TesterProfile?
+  auditLogs      AuditLog[]
+  createdCases   Case[]
+  forceDropAssignments ForceDropAssignment[] @relation("ForceDropAssigner")
+  assignedForceDrops ForceDropAssignment[] @relation("ForceDropTarget")
+  notifications  Notification[]
+}
+
+model AdminProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  adminId   String   @unique
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model DevProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  devId     String   @unique
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String
+  actorRole   Role
+  actorAdminId String?
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    String
+  status      String
+  createdAt   DateTime @default(now())
+  actor       User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+}
+
+model TesterProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  testerId  String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model Case {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String   @unique
+  description String?
+  image       String
+  price       Int
+  environment Environment @default(SYSTEM)
+  probabilityMode ProbabilityMode @default(MANUAL)
+  isActive    Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  drops       Drop[]
+  forceDropAssignments ForceDropAssignment[]
+  inventoryItems InventoryItem[] @relation("CaseInventory")
+
+  @@index([isActive, createdAt])
+}
+
+model Drop {
+  id        String   @id @default(cuid())
+  caseId    String
+  name      String
+  rarity    String
+  image     String
+  price     Int
+  probability Float
+  environment Environment @default(SYSTEM)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  forceDropAssignments ForceDropAssignment[]
+
+  @@index([caseId])
+}
+
+model ForceDropAssignment {
+  id             String   @id @default(cuid())
+  targetUserId   String
+  caseId         String
+  dropId         String
+  assignedById   String
+  reason         String
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  consumedAt     DateTime?
+  targetUser     User     @relation("ForceDropTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  assignedBy     User     @relation("ForceDropAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  drop           Drop     @relation(fields: [dropId], references: [id], onDelete: Restrict)
+
+  @@index([targetUserId, caseId, status])
+  @@index([targetUserId, createdAt])
+  @@index([dropId, status])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model InventoryItem {
+  id         String    @id @default(cuid())
+  userId     String
+  itemId     String
+  name       String
+  rarity     String
+  image      String
+  price      Int
+  addedAt    DateTime  @default(now())
+  soldAt     DateTime?
+  caseId      String?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operations Operation[]
+  case       Case?     @relation("CaseInventory", fields: [caseId], references: [id], onDelete: SetNull)
+
+  @@index([userId, soldAt])
+}
+
+model Operation {
+  id        String        @id @default(cuid())
+  userId    String
+  type      String
+  itemId    String?
+  label     String?
+  amount    Int
+  status    String
+  createdAt DateTime      @default(now())
+  idempotencyKey String?   @unique
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item      InventoryItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  rubAmount   Int?
+  zCoinAmount Int
+  status      String
+  paymentId   String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model ZCoinOperation {
+  id              String   @id @default(cuid())
+  idempotencyKey  String   @unique
+  actorUserId     String
+  targetUserId    String
+  operation       String
+  amount          Int
+  oldBalance      Int
+  newBalance      Int
+  reason          String
+  status          String
+  denialReason    String?
+  createdAt       DateTime @default(now())
+  actor           User     @relation("ZCoinActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  target          User     @relation("ZCoinTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([actorUserId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([operation, createdAt])
+}
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String
+  subject     String
+  description String
+  status      String   @default("OPEN")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    SupportMessage[]
+
+  @@index([userId, createdAt])
+}
+
+model SupportMessage {
+  id           String        @id @default(cuid())
+  ticketId     String
+  authorUserId String
+  body         String
+  createdAt    DateTime      @default(now())
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author       User          @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, createdAt])
+}

@@ -1,103 +1,249 @@
+"use client";
+
+import Header from "@/app/components/Header";
+import RecentDropsStrip from "@/app/components/RecentDropsStrip";
 import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+type HomeCase = { id: string; slug: string; name: string; price: number; image: string; glow: string; accent: string; ring: string };
+const caseVisuals = [
+  { glow: "from-red-600/35 via-red-500/20 to-transparent", accent: "shadow-[0_0_38px_rgba(244,63,94,0.45)]", ring: "border-red-500/40" },
+  { glow: "from-yellow-500/30 via-amber-400/20 to-transparent", accent: "shadow-[0_0_38px_rgba(251,191,36,0.38)]", ring: "border-yellow-500/40" },
+  { glow: "from-emerald-500/30 via-green-400/20 to-transparent", accent: "shadow-[0_0_38px_rgba(52,211,153,0.42)]", ring: "border-emerald-500/40" },
+  { glow: "from-violet-600/30 via-blue-500/20 to-transparent", accent: "shadow-[0_0_38px_rgba(96,165,250,0.38)]", ring: "border-blue-500/40" },
+];
+
+const benefits = [
+  { title: "Честные шансы", icon: "shield" },
+  { title: "Быстрые выплаты", icon: "bolt" },
+  { title: "Надёжно и безопасно", icon: "lock" },
+  { title: "Для сообщества", icon: "users" },
+  { title: "Бонусы каждый день", icon: "gift" },
+];
+
+function BenefitIcon({ type }: { type: string }) {
+  const commonProps = {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    className: "h-5 w-5",
+  };
+
+  switch (type) {
+    case "shield":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 3 5 6v6c0 4.4 2.8 8.2 7 10 4.2-1.8 7-5.6 7-10V6l-7-3Z" strokeLinejoin="round" />
+          <path d="M9.5 12.5 11 14l3.5-4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "bolt":
+      return (
+        <svg {...commonProps}>
+          <path d="M13 2 5 12h5l-1 10 8-10h-5l1-10Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "lock":
+      return (
+        <svg {...commonProps}>
+          <rect x="5" y="11" width="14" height="9" rx="2" />
+          <path d="M8 11V8a4 4 0 1 1 8 0v3" strokeLinecap="round" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg {...commonProps}>
+          <path d="M16 19a4 4 0 0 0-8 0" strokeLinecap="round" />
+          <circle cx="12" cy="9" r="3" />
+          <path d="M20 19a4 4 0 0 0-2.8-3.8M4 19a4 4 0 0 1 2.8-3.8" strokeLinecap="round" />
+        </svg>
+      );
+    case "gift":
+      return (
+        <svg {...commonProps}>
+          <path d="M4 10h16v10H4zM12 10v10M4 14h16" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 10s-2-6-5-6c-1.7 0-2.5 1.5-2.5 3 0 1.7 1 3 3 3h4.5Zm0 0s2-6 5-6c1.7 0 2.5 1.5 2.5 3 0 1.7-1 3-3 3H12Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [cases, setCases] = useState<HomeCase[]>([]);
+  const [casesError, setCasesError] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    const loadCases = async () => {
+      try {
+        const response = await fetch("/api/cases", { cache: "no-store" });
+        const body = await response.text();
+        let data: { cases?: Array<{ id: string; slug: string; name: string; price: number; image: string }> } = {};
+        try {
+          data = body ? JSON.parse(body) as typeof data : {};
+        } catch {
+          throw new Error("API вернул некорректный ответ.");
+        }
+        if (!response.ok) throw new Error(typeof (data as { error?: unknown }).error === "string" ? (data as { error: string }).error : "Не удалось загрузить кейсы.");
+        setCases((data.cases ?? []).map((item, index) => ({ ...item, ...caseVisuals[index % caseVisuals.length] })));
+      } catch (error) {
+        setCasesError(error instanceof Error ? error.message : "Не удалось загрузить кейсы.");
+      }
+    };
+    void loadCases();
+  }, []);
+
+  return (
+    <main className="min-h-screen bg-[#05070d] text-white">
+      <Header />
+
+      <section className="px-4 pb-6 pt-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1440px] rounded-[30px] border border-white/10 bg-[#070b11]/90 shadow-[0_0_36px_rgba(76,29,149,0.25)]">
+          <div className="border-b border-white/10 px-4 py-4 sm:px-6 lg:px-8">
+            <RecentDropsStrip title="Последние дропы" />
+          </div>
+
+          <div className="relative overflow-hidden px-4 pb-16 pt-8 sm:px-6 lg:px-8">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.18),_rgba(2,6,23,0)_45%)]" />
+            <div className="absolute left-[-8%] top-0 h-72 w-72 rounded-full bg-violet-500/10 blur-[120px]" />
+            <div className="absolute right-[-10%] top-24 h-80 w-80 rounded-full bg-blue-500/10 blur-[120px]" />
+
+            <div className="relative mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
+              <div>
+                <p className="mb-4 text-[0.72rem] font-semibold uppercase tracking-[0.32em] text-violet-300/90">
+                  ZEONGGSTORE
+                </p>
+                <h1 className="max-w-xl text-5xl font-black uppercase leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl xl:text-[5.4rem]">
+                  Лучшие кейсы
+                  <span className="mt-2 block text-violet-200">для настоящих</span>
+                  <span className="mt-2 block">игроков</span>
+                </h1>
+
+                <p className="mt-6 max-w-md text-lg leading-8 text-slate-300">
+                  Открывай кейсы, испытывай удачу и забирай топовые скины в свой инвентарь!
+                </p>
+
+                <div className="mt-8 flex flex-wrap gap-4">
+                  <Link
+                    href={cases[0] ? `/case?caseId=${encodeURIComponent(cases[0].slug)}` : "/case"}
+                    className="inline-flex items-center justify-center rounded-xl border border-violet-500/40 bg-gradient-to-r from-violet-500 to-fuchsia-500 px-7 py-3.5 text-sm font-black uppercase tracking-[0.12em] text-white shadow-[0_0_28px_rgba(168,85,247,0.45)] transition hover:brightness-110"
+                  >
+                    Открыть кейсы
+                  </Link>
+                  <Link
+                    href="/#about"
+                    className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-[#0d111a]/80 px-7 py-3.5 text-sm font-black uppercase tracking-[0.12em] text-slate-200 transition hover:border-violet-400/60 hover:text-white"
+                  >
+                    Как это работает?
+                  </Link>
+                </div>
+              </div>
+
+              <div className="relative h-[500px] w-full">
+                <div className="absolute inset-x-8 bottom-2 top-6 rounded-[38px] border border-violet-500/20 bg-[radial-gradient(circle_at_center,_rgba(76,29,149,0.4),_rgba(7,11,17,0)_58%)] shadow-[0_0_70px_rgba(76,29,149,0.3)]" />
+
+                {cases.map((caseItem, index) => {
+                  const positions = [
+                    { left: "10%", top: "20%", rotate: "-10deg" },
+                    { left: "34%", top: "6%", rotate: "-2deg" },
+                    { left: "54%", top: "18%", rotate: "8deg" },
+                    { left: "68%", top: "32%", rotate: "16deg" },
+                  ];
+
+                  return (
+                    <div
+                      key={caseItem.id}
+                      className="absolute z-10 overflow-hidden"
+                      style={{
+                        left: positions[index].left,
+                        top: positions[index].top,
+                        transform: `rotate(${positions[index].rotate})`,
+                      }}
+                    >
+                      <div className={`relative h-[220px] w-[250px] rounded-[24px] border ${caseItem.ring} bg-[#070b11]/80 p-3 shadow-[0_0_30px_rgba(168,85,247,0.14)]`}>
+                        <div className={`absolute inset-0 bg-gradient-to-br ${caseItem.glow} opacity-80 blur-2xl`} />
+                        <div className="relative z-10 flex h-full items-center justify-center rounded-[18px] border border-white/10 bg-[#0a0f1d]/80">
+                          <Image
+                            src={caseItem.image}
+                            alt={caseItem.name}
+                            width={240}
+                            height={180}
+                            className={`h-full w-full object-contain ${caseItem.accent}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </section>
+
+      <section id="cases" className="px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1440px]">
+          <div className="mb-8 flex items-center gap-3">
+            <span className="inline-flex h-3 w-3 rounded-full bg-violet-400 shadow-[0_0_20px_rgba(168,85,247,0.8)]" />
+            <h2 className="text-3xl font-black uppercase tracking-[-0.05em] text-white">Популярные кейсы</h2>
+          </div>
+
+          {casesError && <p className="mb-6 rounded-xl border border-red-300/20 bg-red-500/10 p-4 text-sm text-red-200">{casesError}</p>}
+
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {cases.map((caseItem) => (
+              <article
+                key={caseItem.id}
+                id={caseItem.id}
+                className="group relative overflow-hidden rounded-[30px] border border-white/10 bg-[#0a0f18]/90 p-5 shadow-[0_0_30px_rgba(15,23,42,0.9)]"
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${caseItem.glow} opacity-70 blur-2xl`} />
+                <div className="relative z-10 flex h-full flex-col items-center">
+                  <div className={`relative h-52 w-full overflow-hidden rounded-[24px] border ${caseItem.ring} bg-[#070b11]/80`}>
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent" />
+                    <Image
+                      src={caseItem.image}
+                      alt={caseItem.name}
+                      fill
+                      className="object-contain drop-shadow-[0_0_22px_rgba(255,255,255,0.18)]"
+                    />
+                  </div>
+
+                  <p className="mt-5 text-[1.1rem] font-semibold text-slate-100">{caseItem.name}</p>
+                  <div className="mt-4 inline-flex items-center justify-center rounded-xl border border-violet-500/40 bg-violet-500/10 px-6 py-2 text-xl font-black text-violet-200 shadow-[0_0_16px_rgba(168,85,247,0.22)]">
+                    {caseItem.price} Z
+                  </div>
+                  <Link
+                    href={`/case?caseId=${caseItem.id}`}
+                    className="mt-6 inline-flex w-full items-center justify-center rounded-xl border border-violet-500/40 bg-gradient-to-r from-violet-600/80 to-fuchsia-600/80 px-5 py-3 text-sm font-black uppercase tracking-[0.12em] text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] transition hover:brightness-110"
+                  >
+                    Открыть
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 pb-18 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-[1440px] gap-4 md:grid-cols-5">
+          {benefits.map((item, index) => (
+            <div
+              key={item.title}
+              className="flex items-center gap-3 rounded-[20px] border border-white/10 bg-[#0a0f18]/80 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+            >
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-500/40 bg-gradient-to-br ${index % 2 === 0 ? "from-violet-500/18 to-blue-500/10 text-violet-200" : "from-violet-500/18 to-fuchsia-500/10 text-violet-200"}`}>
+                <BenefitIcon type={item.icon} />
+              </div>
+              <span className="text-sm font-semibold leading-5 text-slate-200">{item.title}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </main>
   );
 }
