@@ -79,7 +79,10 @@ export default function Home() {
   useEffect(() => {
     const loadCases = async () => {
       try {
-        const response = await fetch("/api/cases", { cache: "no-store" });
+        const response = await fetch("/api/cases", {
+          cache: "no-store",
+          credentials: "include",
+        });
         const body = await response.text();
         let data: { cases?: Array<{ id: string; slug: string; name: string; price: number; image: string }> } = {};
         try {
