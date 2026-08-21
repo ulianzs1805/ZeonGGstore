@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { validateChances } from "@/lib/economy-guard";
 import { withFinalProbabilities } from "@/lib/price-weighted-chances";
+import { ensureSystemCatalog } from "@/lib/system-catalog";
 
 function pickDrop<T extends { probability: number }>(drops: T[]): T {
   const point = (randomInt(0, 1000000) / 1000000) * 100;
@@ -27,6 +28,7 @@ type OpenResult = {
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Необходим вход" }, { status: 401 });
+  await ensureSystemCatalog(prisma);
 
   const body = await request.json().catch(() => null) as { caseId?: unknown; preview?: unknown; idempotencyKey?: unknown } | null;
   const requestedCaseId = typeof body?.caseId === "string" ? body.caseId : "";

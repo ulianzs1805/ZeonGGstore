@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission, writeAuditLog } from "@/lib/rbac";
 import { validateDropPrice } from "@/lib/economy-guard";
 import { calculateFinalProbabilities } from "@/lib/price-weighted-chances";
+import { ensureSystemCatalog } from "@/lib/system-catalog";
 
 const DEV_MAX_PRICE = 10000;
 const NPN1_MAX_PRICE = 100000;
@@ -25,6 +26,7 @@ function attachCaseProbabilities<T extends { id: string; caseId: string; price: 
 export async function GET() {
   const access = await requirePermission("SKIN_PRICE_MANAGE");
   if (!access.user) return access.response;
+  await ensureSystemCatalog(prisma);
 
   const drops = await prisma.drop.findMany({
     include: { case: { select: { id: true, name: true, slug: true, environment: true, isActive: true, probabilityMode: true } } },
@@ -52,6 +54,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const access = await requirePermission("SKIN_PRICE_MANAGE");
   if (!access.user) return access.response;
+  await ensureSystemCatalog(prisma);
 
   const body = await request.json().catch(() => null) as { dropId?: unknown; price?: unknown } | null;
   const dropId = typeof body?.dropId === "string" ? body.dropId.trim() : "";
@@ -63,8 +66,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: `Цена должна быть целым числом от 1 до ${maxPrice} Z-Coin.` }, { status: 400 });
   }
 
-  const target = await prisma.drop.findUnique({ where: { id: dropId }, include: { case: { select: { name: true, environment: true, probabilityMode: true } } } });
+  const target = await prisma.drop.findUnique({ where: { id: dropId }, include: { case: { select: { name: true, slug: true, environment: true, probabilityMode: true } } } });
   if (!target) return NextResponse.json({ error: "Скин не найден." }, { status: 404 });
+  if (target.case.slug === "furious") return NextResponse.json({ error: "Цены Furious collection зафиксированы и не изменяются через админ-панель." }, { status: 403 });
 
   try {
     const updated = await prisma.$transaction(async (tx) => {

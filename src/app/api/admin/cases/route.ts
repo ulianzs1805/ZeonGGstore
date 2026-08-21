@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, writeAuditLog } from "@/lib/rbac";
 import { validateCasePrice, validateChances, validateDropPrice, validateRarity } from "@/lib/economy-guard";
+import { ensureSystemCatalog } from "@/lib/system-catalog";
+import { withFinalProbabilities } from "@/lib/price-weighted-chances";
 
 type DropInput = { name?: unknown; rarity?: unknown; image?: unknown; price?: unknown; chance?: unknown; probability?: unknown };
 const DEFAULT_ADMIN_CASE_PRICE = 199;
@@ -21,13 +23,14 @@ function makeSlug(value: string) {
 export async function GET() {
   const access = await requirePermission("CASE_CREATE");
   if (!access.user) return access.response;
+  await ensureSystemCatalog(prisma);
 
   const cases = await prisma.case.findMany({
     where: access.user.role === "ADMIN" ? { createdById: access.user.id } : undefined,
     include: { drops: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json({ cases });
+  return NextResponse.json({ cases: cases.map((item) => ({ ...item, drops: withFinalProbabilities(item.drops, item.probabilityMode) })) });
 }
 
 export async function POST(request: Request) {

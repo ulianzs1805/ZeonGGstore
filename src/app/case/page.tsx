@@ -43,7 +43,9 @@ function readRecentDrops(): CaseItem[] {
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const current = Array.isArray(parsed) ? parsed.filter((item) => item?.name !== "AK-47 Skin" && item?.name !== "Knife Skin" && item?.image !== "/skins/default.png") : [];
+    if (current.length !== parsed.length) window.localStorage.setItem(RECENT_DROPS_KEY, JSON.stringify(current));
+    return current;
   } catch {
     return [];
   }
@@ -75,6 +77,10 @@ function readBestDrop(): CaseItem | null {
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
+    if (parsed?.name === "AK-47 Skin" || parsed?.name === "Knife Skin" || parsed?.image === "/skins/default.png") {
+      window.localStorage.removeItem(BEST_DROP_KEY);
+      return null;
+    }
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
@@ -164,7 +170,7 @@ export default function CasePage() {
   const [catalog, setCatalog] = useState<CatalogCase[]>([]);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const activeCase = catalog.find((item) => item.slug === selectedCaseId || item.id === selectedCaseId) ?? null;
-  const caseSkins = activeCase?.drops.map((drop) => ({ id: drop.id, name: drop.name, rarity: drop.rarity, color: getRarityTextClass(drop.rarity), image: drop.image, price: drop.price, chance: drop.probability, caseId: activeCase.slug, caseImage: activeCase.image })) ?? [];
+  const caseSkins = activeCase?.drops.filter((drop) => drop.name !== "AK-47 Skin" && drop.name !== "Knife Skin" && drop.image !== "/skins/default.png").map((drop) => ({ id: drop.id, name: drop.name, rarity: drop.rarity, color: getRarityTextClass(drop.rarity), image: drop.image, price: drop.price, chance: drop.probability, caseId: activeCase.slug, caseImage: activeCase.image, collection: activeCase.slug === "furious" ? "Furious collection" : undefined })) ?? [];
   const activeCaseName = activeCase?.name ?? "Загрузка кейса...";
 
   const [opening, setOpening] = useState(false);
@@ -215,7 +221,7 @@ export default function CasePage() {
     const params = new URLSearchParams(window.location.search);
     const requestedCaseId = params.get("caseId");
     setSelectedCaseId(requestedCaseId);
-    void fetch("/api/cases", { cache: "no-store" }).then((response) => response.json()).then((data: { cases?: CatalogCase[] }) => {
+    void fetch(`/api/cases?version=${Date.now()}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } }).then((response) => response.json()).then((data: { cases?: CatalogCase[] }) => {
       const nextCatalog = Array.isArray(data.cases) ? data.cases : [];
       setCatalog(nextCatalog);
       if (!requestedCaseId) setSelectedCaseId(nextCatalog[0]?.slug ?? null);
@@ -401,7 +407,7 @@ export default function CasePage() {
   const startCaseRoll = async () => {
 
     // Prevent concurrent starts
-    if (isRollingRef.current || opening || resetting || resultVisible) return;
+    if (isRollingRef.current || opening || resetting) return;
     isRollingRef.current = true;
     setOpenError("");
     userOpenKeyRef.current = `open-${crypto.randomUUID()}`;
@@ -1107,6 +1113,7 @@ export default function CasePage() {
                     <div className="mt-3">
                       <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${item.color}`}>{item.rarity}</p>
                       <h3 className="mt-1 text-sm font-black text-white">{item.name}</h3>
+                      {item.collection && <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">{item.collection}</p>}
                     </div>
                   )}
 
@@ -1115,6 +1122,7 @@ export default function CasePage() {
                       <div>
                         <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${item.color}`}>{item.rarity}</p>
                         <h3 className="mt-1 text-lg font-black text-white">{item.name}</h3>
+                        {item.collection && <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{item.collection}</p>}
                       </div>
 
                       <div className="space-y-2 pt-2 border-t border-white/10">

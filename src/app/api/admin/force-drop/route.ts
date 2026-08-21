@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireNpn1Dev, writeAuditLog } from "@/lib/rbac";
+import { requirePermission, writeAuditLog } from "@/lib/rbac";
+import { ensureSystemCatalog } from "@/lib/system-catalog";
+import { withFinalProbabilities } from "@/lib/price-weighted-chances";
 
 const FORCE_DROP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(request: Request) {
-  const access = await requireNpn1Dev();
+  const access = await requirePermission("FORCE_DROP");
   if (!access.user) return access.response;
+  await ensureSystemCatalog(prisma);
   const body = await request.json().catch(() => null);
   const targetUserId = typeof body?.targetUserId === "string" ? body.targetUserId : "";
   const caseId = typeof body?.caseId === "string" ? body.caseId : "";
@@ -14,7 +17,8 @@ export async function POST(request: Request) {
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
   if (!targetUserId || !caseId || !dropId || reason.length < 5) return NextResponse.json({ error: "Выберите пользователя, кейс, Drop и причину от 5 символов." }, { status: 400 });
   const target = await prisma.user.findUnique({ where: { id: targetUserId } });
-  const selectedCase = await prisma.case.findFirst({ where: { OR: [{ id: caseId }, { slug: caseId }], isActive: true }, include: { drops: true } });
+  const selectedCaseRecord = await prisma.case.findFirst({ where: { OR: [{ id: caseId }, { slug: caseId }], isActive: true }, include: { drops: true } });
+  const selectedCase = selectedCaseRecord ? { ...selectedCaseRecord, drops: withFinalProbabilities(selectedCaseRecord.drops, selectedCaseRecord.probabilityMode) } : null;
   const drop = selectedCase?.drops.find((item) => item.id === dropId);
   if (!target || !selectedCase || !drop) return NextResponse.json({ error: "Пользователь, кейс или Drop не найден." }, { status: 404 });
   let result;

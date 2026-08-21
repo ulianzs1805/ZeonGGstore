@@ -17,7 +17,7 @@ const DEFAULT_RARITY_WEIGHTS: Record<string, number> = {
   MYTHIC: 20,
   ARCANE: 28,
 };
-const DEFAULT_PRICE_EXPONENT = 0.75;
+const DEFAULT_PRICE_EXPONENT = 1.25;
 const DEFAULT_PRICE_REFERENCE = 100;
 
 function readPositiveNumber(value: string | undefined, fallback: number) {
