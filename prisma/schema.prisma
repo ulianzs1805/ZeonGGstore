@@ -115,6 +115,7 @@ model Drop {
   forceDropAssignments ForceDropAssignment[]
 
   @@index([caseId])
+  @@unique([caseId, name])
 }
 
 model ForceDropAssignment {
