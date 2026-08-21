@@ -30,6 +30,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const access = await requirePermission("CASE_CREATE");
   if (!access.user) return access.response;
+  await ensureSystemCatalog(prisma);
   const body = await request.json().catch(() => null) as { name?: unknown; description?: unknown; image?: unknown; price?: unknown; drops?: unknown; probabilityMode?: unknown } | null;
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const description = typeof body?.description === "string" ? body.description.trim() : null;
