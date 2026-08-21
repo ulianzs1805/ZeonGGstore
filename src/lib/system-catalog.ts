@@ -46,14 +46,33 @@ async function syncCatalog(prisma: PrismaClient) {
 
   for (const currentCase of cases) {
     if (currentCase.slug === "furious") {
-      await prisma.drop.deleteMany({ where: { caseId: currentCase.id, name: { in: [...LEGACY_FURIOUS_DROP_NAMES] } } });
-      currentCase.drops = currentCase.drops.filter((drop) => !LEGACY_FURIOUS_DROP_NAMES.includes(drop.name as typeof LEGACY_FURIOUS_DROP_NAMES[number]));
+      await prisma.drop.deleteMany({
+        where: {
+          caseId: currentCase.id,
+          name: { in: [...LEGACY_FURIOUS_DROP_NAMES] },
+        },
+      });
     }
+
     if (currentCase.probabilityMode !== "DYNAMIC") {
-      await prisma.case.update({ where: { id: currentCase.id }, data: { probabilityMode: "DYNAMIC" } });
+      await prisma.case.update({
+        where: { id: currentCase.id },
+        data: { probabilityMode: "DYNAMIC" },
+      });
     }
+
     const definitions = currentCase.slug === "furious" ? FURIOUS_DROPS : SYSTEM_DROPS;
-    for (const [index, definition] of definitions.entries()) {
+    const existingDrops = await prisma.drop.findMany({
+      where: { caseId: currentCase.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const unmatched = existingDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name));
+    const reusable = unmatched.slice(0, Math.max(0, definitions.length - existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length));
+
+    const reusableById = new Set(reusable.map((drop) => drop.id));
+
+    for (const definition of definitions) {
       const data = {
         name: definition.name,
         rarity: definition.rarity,
@@ -62,17 +81,41 @@ async function syncCatalog(prisma: PrismaClient) {
         price: "price" in definition ? definition.price : currentCase.price * definition.priceMultiplier,
         environment: Environment.SYSTEM,
       };
-      const currentDrop = currentCase.drops[index];
-      if (currentDrop) {
-        if (currentDrop.name !== data.name || currentDrop.rarity !== data.rarity || currentDrop.image !== data.image) {
-          await prisma.drop.update({ where: { id: currentDrop.id }, data });
-        }
-      } else {
-        await prisma.drop.create({ data: { ...data, caseId: currentCase.id } });
+
+      const existingByName = existingDrops.find((drop) => drop.name === definition.name);
+      if (existingByName) {
+        await prisma.drop.update({
+          where: { id: existingByName.id },
+          data,
+        });
+        continue;
       }
+
+      const reusableDrop = reusable.find((drop) => reusableById.has(drop.id));
+      if (reusableDrop) {
+        reusableById.delete(reusableDrop.id);
+        await prisma.drop.update({
+          where: { id: reusableDrop.id },
+          data,
+        });
+        continue;
+      }
+
+      await prisma.drop.create({ data: { ...data, caseId: currentCase.id } });
     }
-    if (currentCase.slug === "furious" && currentCase.drops.length > definitions.length) {
-      await prisma.drop.deleteMany({ where: { caseId: currentCase.id, id: { in: currentCase.drops.slice(definitions.length).map((drop) => drop.id) } } });
+
+    const finalDrops = await prisma.drop.findMany({
+      where: { caseId: currentCase.id },
+      orderBy: { createdAt: "asc" },
+    });
+    const idsToDelete = finalDrops
+      .filter((drop) => !definitions.some((definition) => definition.name === drop.name))
+      .map((drop) => drop.id);
+
+    if (idsToDelete.length) {
+      await prisma.drop.deleteMany({
+        where: { caseId: currentCase.id, id: { in: idsToDelete } },
+      });
     }
   }
 }
