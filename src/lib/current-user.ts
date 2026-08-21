@@ -36,17 +36,27 @@ export async function getCurrentUser() {
     },
   });
 
-  // Assign TESTER role if the user's email is listed in ZEON_TESTER_EMAILS and user is currently a plain USER.
-  const testerEmails = (process.env.ZEON_TESTER_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-  if (testerEmails.includes(email) && user.role === "USER") {
-    await prisma.user.update({ where: { id: user.id }, data: { role: "TESTER" } });
-  }
+  const testerEmails = (process.env.ZEON_TESTER_EMAILS || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
 
-  const npnEmail = (process.env.ZEON_NPN1_DEV_EMAIL?.trim().toLowerCase() || NPN1_OWNER_EMAIL);
-  const shouldBeNpn1 = user.email === NPN1_OWNER_EMAIL && user.email === npnEmail;
-  const effectiveUser = shouldBeNpn1
-    ? (user.role === "NPN1_DEV" ? user : await prisma.user.update({ where: { id: user.id }, data: { role: "NPN1_DEV" } }))
-    : (user.role === "NPN1_DEV" ? await prisma.user.update({ where: { id: user.id }, data: { role: "USER" } }) : user);
+  let effectiveUser = user;
+
+  const ownerEmail = process.env.ZEON_NPN1_DEV_EMAIL?.trim().toLowerCase() || NPN1_OWNER_EMAIL;
+  const shouldBeNpn1 = email === ownerEmail;
+
+  if (shouldBeNpn1 && effectiveUser.role !== "NPN1_DEV") {
+    effectiveUser = await prisma.user.update({
+      where: { id: effectiveUser.id },
+      data: { role: "NPN1_DEV" },
+    });
+  } else if (!shouldBeNpn1 && testerEmails.includes(email) && effectiveUser.role === "USER") {
+    effectiveUser = await prisma.user.update({
+      where: { id: effectiveUser.id },
+      data: { role: "TESTER" },
+    });
+  }
 
   if (effectiveUser.role === "ADMIN") {
     await prisma.adminProfile.upsert({
