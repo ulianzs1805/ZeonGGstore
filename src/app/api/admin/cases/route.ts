@@ -13,7 +13,10 @@ function validName(value: unknown): value is string {
   return typeof value === "string" && value.trim().length >= 3 && value.trim().length <= 80 && /^[\p{L}\p{N} ._'"-]+$/u.test(value.trim());
 }
 function normalizeCaseName(value: string) { return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("ru-RU"); }
-function processedImage(value: string) { return value.startsWith("/uploads/processed/") && value.endsWith(".png") && value.length <= 240; }
+function processedImage(value: string) {
+  if (typeof value !== "string" || value.length < 12 || value.length > 240) return false;
+  return /^\/uploads\/[a-z0-9-]+\/[a-f0-9-]+\.(?:png|jpg|jpeg|webp)$/i.test(value);
+}
 function makeSlug(value: string) { return value.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `case-${Date.now()}`; }
 
 export async function GET() {
