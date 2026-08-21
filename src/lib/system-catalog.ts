@@ -62,13 +62,26 @@ async function syncCatalog(prisma: PrismaClient) {
         price: "price" in definition ? definition.price : currentCase.price * definition.priceMultiplier,
         environment: Environment.SYSTEM,
       };
-      const currentDrop = currentCase.drops[index];
+      const currentDrop = currentCase.drops.find(
+        (drop) => drop.name === data.name
+      );
+
       if (currentDrop) {
-        if (currentDrop.name !== data.name || currentDrop.rarity !== data.rarity || currentDrop.image !== data.image) {
-          await prisma.drop.update({ where: { id: currentDrop.id }, data });
+        if (
+          currentDrop.rarity !== data.rarity ||
+          currentDrop.image !== data.image ||
+          currentDrop.probability !== data.probability ||
+          currentDrop.price !== data.price
+        ) {
+          await prisma.drop.update({
+            where: { id: currentDrop.id },
+            data,
+          });
         }
       } else {
-        await prisma.drop.create({ data: { ...data, caseId: currentCase.id } });
+        await prisma.drop.create({
+          data: { ...data, caseId: currentCase.id },
+        });
       }
     }
     if (currentCase.slug === "furious" && currentCase.drops.length > definitions.length) {
