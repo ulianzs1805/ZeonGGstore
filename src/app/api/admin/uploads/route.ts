@@ -11,11 +11,17 @@ const ALLOWED_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp"]);
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function makeSafeFolder(value: string) {
+  const latin = value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return latin || `case-${Date.now().toString(36)}`;
+}
+
 export async function POST(request: Request) {
   const access = await requirePermission("CASE_CREATE");
   if (!access.user) return access.response;
   const formData = await request.formData().catch(() => null);
   const file = formData?.get("file");
+  const requestedFolder = typeof formData?.get("caseFolder") === "string" ? String(formData.get("caseFolder")).trim() : "";
   if (!(file instanceof File)) return NextResponse.json({ error: "Выберите изображение." }, { status: 400 });
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   const mimeAllowed = !file.type || ALLOWED_TYPES.has(file.type);
@@ -34,11 +40,12 @@ export async function POST(request: Request) {
       processedSuccessfully = false;
       processed = source;
     }
+    const folder = requestedFolder ? makeSafeFolder(requestedFolder) : "processed";
     const filename = `${randomUUID()}.${processedSuccessfully ? "png" : extension}`;
-    const directory = path.join(process.cwd(), "public", "uploads", "processed");
+    const directory = path.join(process.cwd(), "public", "uploads", folder);
     await mkdir(directory, { recursive: true });
     await writeFile(path.join(directory, filename), processed, { flag: "wx" });
-    return NextResponse.json({ imageUrl: `/uploads/processed/${filename}`, format: processedSuccessfully ? "PNG" : extension.toUpperCase(), processed: processedSuccessfully, message: processedSuccessfully ? "Изображение обработано и сохранено." : "Изображение сохранено без обработки." });
+    return NextResponse.json({ imageUrl: `/uploads/${folder}/${filename}`, format: processedSuccessfully ? "PNG" : extension.toUpperCase(), processed: processedSuccessfully, caseFolder: folder, message: processedSuccessfully ? "Изображение обработано и сохранено в папку кейса." : "Изображение сохранено в папку кейса без обработки." });
   } catch (error) {
     console.error("POST /api/admin/uploads failed", error);
     return NextResponse.json({ error: "Не удалось сохранить изображение. Проверьте файл и попробуйте ещё раз." }, { status: 422 });
