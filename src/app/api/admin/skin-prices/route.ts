@@ -66,9 +66,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: `Цена должна быть целым числом от 1 до ${maxPrice} Z-Coin.` }, { status: 400 });
   }
 
-  const target = await prisma.drop.findUnique({ where: { id: dropId }, include: { case: { select: { name: true, slug: true, environment: true, probabilityMode: true } } } });
+  const target = await prisma.drop.findUnique({ where: { id: dropId }, include: { case: { select: { name: true, environment: true, probabilityMode: true } } } });
   if (!target) return NextResponse.json({ error: "Скин не найден." }, { status: 404 });
-  if (target.case.slug === "furious") return NextResponse.json({ error: "Цены Furious collection зафиксированы и не изменяются через админ-панель." }, { status: 403 });
 
   try {
     const updated = await prisma.$transaction(async (tx) => {

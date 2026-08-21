@@ -114,8 +114,8 @@ model Drop {
   case                 Case                  @relation(fields: [caseId], references: [id])
   forceDropAssignments ForceDropAssignment[]
 
-  @@index([caseId])
   @@unique([caseId, name])
+  @@index([caseId])
 }
 
 model ForceDropAssignment {
