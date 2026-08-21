@@ -1,43 +1,58 @@
-import { NextResponse } from "next/server";
-import { prisma, ensurePrismaConnection } from "@/lib/prisma";
-import { ensureSystemCatalog } from "@/lib/system-catalog";
+import { prisma } from '@/lib/prisma';
+import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    await ensurePrismaConnection();
-    await ensureSystemCatalog(prisma);
-    const items = await prisma.inventoryItem.findMany({
-      where: { soldAt: null },
-      include: { case: { select: { id: true, slug: true, name: true, image: true } }, user: { select: { name: true } } },
-      orderBy: { addedAt: "desc" },
-      take: 50,
-    });
+    // Здесь твой код получения данных
+    // Например:
     const drops = await prisma.drop.findMany({
-      where: { id: { in: items.map((item) => item.itemId) } },
-      select: { id: true, name: true, rarity: true, image: true, price: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50
     });
-    const dropsById = new Map(drops.map((drop) => [drop.id, drop]));
 
-    return NextResponse.json({
-      drops: items.map((item) => {
-        const currentDrop = dropsById.get(item.itemId);
-        return {
-          id: item.id,
-          itemId: item.itemId,
-          name: currentDrop?.name ?? item.name,
-          rarity: currentDrop?.rarity ?? item.rarity,
-          image: currentDrop?.image ?? item.image,
-          price: currentDrop?.price ?? item.price,
-          addedAt: item.addedAt,
-          userName: item.user.name,
-          case: item.case,
-        };
-      }),
+    return NextResponse.json(drops);
+  } catch (error) {
+    console.error('Error in recent-drops:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch recent drops' },
+      { status: 500 }
+    );
+  }
+}
+
+// ЕСЛИ У ТЕБЯ ЕСТЬ POST-ЗАПРОСЫ ДЛЯ СОЗДАНИЯ ДРОПОВ, ТО ЭТА ЧАСТЬ ИХ ИСПРАВЛЯЕТ
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { caseId, name, ...rest } = body;
+
+    // Используем upsert для предотвращения дубликатов
+    const result = await prisma.drop.upsert({
+      where: {
+        caseId_name: {  // Составной уникальный ключ
+          caseId: caseId,
+          name: name
+        }
+      },
+      update: {
+        ...rest,
+        updatedAt: new Date()
+      },
+      create: {
+        caseId,
+        name,
+        ...rest,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
     });
-  } catch (err) {
-    // Log the error server-side for debugging (do not include secrets)
-    // eslint-disable-next-line no-console
-    console.error("/api/recent-drops error:", err instanceof Error ? err.message : String(err));
-    return NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 });
+
+    return NextResponse.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error creating drop:', error);
+    return NextResponse.json(
+      { error: 'Failed to create drop' },
+      { status: 500 }
+    );
   }
 }
