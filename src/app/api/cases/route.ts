@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       // Если есть дропы — вставляем их с пропуском дубликатов
       if (drops && drops.length > 0) {
         await tx.drop.createMany({
-          data: drops.map((drop: any) => ({
+          data: drops.map((drop: { name: string; rarity: string; image: string; price: number; probability: number }) => ({
             ...drop,
             caseId: newCase.id
           })),
