@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
+import { getOptimizedSkinImage } from '@/lib/optimized-skin-image';
 
 export async function GET() {
   try {
@@ -9,7 +10,15 @@ export async function GET() {
       }
     });
 
-    return NextResponse.json(cases);
+    const optimizedCases = cases.map((caseItem) => ({
+      ...caseItem,
+      drops: caseItem.drops.map((drop) => ({
+        ...drop,
+        image: getOptimizedSkinImage(drop.image),
+      })),
+    }));
+
+    return NextResponse.json(optimizedCases);
   } catch (error) {
     console.error('Error in cases:', error);
     return NextResponse.json(
@@ -44,7 +53,7 @@ export async function POST(request: Request) {
             ...drop,
             caseId: newCase.id
           })),
-          skipDuplicates: true  // ← ГЛАВНОЕ: пропускаем дубликаты
+          skipDuplicates: true
         });
       }
 
