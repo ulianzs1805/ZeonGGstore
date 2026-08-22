@@ -11,7 +11,11 @@ export async function middleware(request: NextRequest) {
     pathname === "/favicon.ico" ||
     pathname === "/beta" ||
     pathname.startsWith("/api/beta") ||
-    pathname.startsWith("/api/auth/")
+    pathname.startsWith("/api/auth/") ||
+    // The case catalog is read-only/public data. Keep case opening and
+    // inventory endpoints protected, but don't let a missing beta cookie
+    // prevent the case page from loading its catalog.
+    (pathname === "/api/cases" && request.method === "GET")
   ) {
     return NextResponse.next();
   }
