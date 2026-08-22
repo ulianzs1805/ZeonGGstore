@@ -54,10 +54,11 @@ async function syncCatalog(prisma: PrismaClient) {
       });
     }
 
-    if (currentCase.probabilityMode !== "DYNAMIC") {
+    const targetProbabilityMode = currentCase.slug === "furious" ? "MANUAL" : "DYNAMIC";
+    if (currentCase.probabilityMode !== targetProbabilityMode) {
       await prisma.case.update({
         where: { id: currentCase.id },
-        data: { probabilityMode: "DYNAMIC" },
+        data: { probabilityMode: targetProbabilityMode },
       });
     }
 
