@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Role } from "./types/admin";
 
-export default function DashboardPanel() {
+type DashboardPanelProps = {
+  role: Role;
+  email: string;
+  staffId: string | null;
+};
+
+export default function DashboardPanel({ role, email, staffId }: DashboardPanelProps) {
   const [data, setData] = useState<{ users: number; admins: number; devs: number; cases: number; drops: number } | null>(null);
   const [error, setError] = useState("");
   const load = async () => {
@@ -21,5 +28,5 @@ export default function DashboardPanel() {
   useEffect(() => { void load(); }, []);
   if (error) return <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200"><p>{error}</p><button type="button" onClick={() => void load()} className="mt-3 rounded-lg border border-red-300/30 px-3 py-2 font-bold">Повторить</button></div>;
   if (!data) return <div className="space-y-4"><div><h2 className="text-2xl font-black">Обзор</h2><p className="mt-2 text-sm text-slate-400">Загрузка данных панели...</p></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-28 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />)}</div></div>;
-  return <div><h2 className="text-2xl font-black">Обзор</h2><p className="mt-2 text-sm text-slate-400">Сводка по данным панели из Prisma.</p><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{[["Пользователи", data.users], ["ADMIN", data.admins], ["DEV / NPN1", data.devs], ["Активные кейсы", data.cases], ["Drops", data.drops]].map(([label, value]) => <div key={String(label)} className="flex min-h-28 flex-col justify-between rounded-2xl border border-white/10 bg-black/15 p-5"><p className="text-xs uppercase tracking-[0.15em] text-slate-400">{label}</p><p className="mt-3 text-3xl font-black text-violet-200">{Number.isFinite(Number(value)) ? value : 0}</p></div>)}</div></div>;
+  return <div><h2 className="text-2xl font-black">Обзор</h2><p className="mt-2 text-sm text-slate-400">Сводка по данным панели из Prisma.</p><p className="mt-1 text-xs text-slate-500">{email} · {role}{staffId ? ` · Staff: ${staffId}` : ""}</p><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{[["Пользователи", data.users], ["ADMIN", data.admins], ["DEV / NPN1", data.devs], ["Активные кейсы", data.cases], ["Drops", data.drops]].map(([label, value]) => <div key={String(label)} className="flex min-h-28 flex-col justify-between rounded-2xl border border-white/10 bg-black/15 p-5"><p className="text-xs uppercase tracking-[0.15em] text-slate-400">{label}</p><p className="mt-3 text-3xl font-black text-violet-200">{Number.isFinite(Number(value)) ? value : 0}</p></div>)}</div></div>;
 }
