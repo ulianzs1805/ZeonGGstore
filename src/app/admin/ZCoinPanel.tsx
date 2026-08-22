@@ -44,7 +44,14 @@ export default function ZCoinPanel() {
     const response = await fetch("/api/admin/zcoin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetUserId: target.id, operation, amount: Number(amount), reason, idempotencyKey: crypto.randomUUID() }) });
     const data = await response.json().catch(() => null);
     setMessage(response.ok ? "Операция успешно выполнена." : data?.error || "Операция отклонена.");
-    if (response.ok) { setAmount(""); setReason(""); await load(); }
+    if (response.ok) {
+      setAmount("");
+      setReason("");
+      // Header listens to this event, so self-balance changes from the Z-Coin panel
+      // are reflected immediately without a page reload.
+      window.dispatchEvent(new Event("zeon-profile-updated"));
+      await load();
+    }
     setBusy(false);
   };
   const numericAmount = Number(amount);
