@@ -65,15 +65,8 @@ export default function CasePage() {
   const catalogRef = useRef<CatalogCase[]>([]);
   const activeCase = catalog.find((item) => item.slug === selectedCaseId || item.id === selectedCaseId) ?? null;
   const caseSkins: CaseItem[] = activeCase?.drops.map((drop) => ({
-    id: drop.id,
-    name: drop.name,
-    rarity: drop.rarity,
-    color: getRarityTextClass(drop.rarity),
-    image: drop.image,
-    price: drop.price,
-    chance: drop.probability,
-    caseId: activeCase.slug,
-    caseImage: activeCase.image,
+    id: drop.id, name: drop.name, rarity: drop.rarity, color: getRarityTextClass(drop.rarity), image: drop.image,
+    price: drop.price, chance: drop.probability, caseId: activeCase.slug, caseImage: activeCase.image,
   })) ?? [];
 
   useEffect(() => {
@@ -92,10 +85,6 @@ export default function CasePage() {
       })
       .catch((error: unknown) => setOpenError(error instanceof Error ? error.message : "Не удалось загрузить каталог кейсов"));
   }, []);
-
-  useEffect(() => {
-    if (caseSkins.length && !opening && !animationRequest) setRouletteSlots(buildRouletteSlots(caseSkins).slots);
-  }, [caseSkins.length, activeCase?.id, opening, animationRequest]);
 
   useEffect(() => {
     const sync = () => setBestDrop(readBestDrop());
@@ -162,15 +151,8 @@ export default function CasePage() {
     setResultAction(null);
     setAnimating(false);
     setAnimationRequest(null);
+    setRouletteSlots([]);
     setResetToken((value) => value + 1);
-
-    const provisional = buildRouletteSlots(currentSkins);
-    if (!provisional.winner) {
-      setOpening(false);
-      setOpenError("В кейсе нет доступного дропа");
-      return;
-    }
-    setRouletteSlots(provisional.slots);
 
     try {
       const response = await fetch("/api/cases/open", {
@@ -184,21 +166,19 @@ export default function CasePage() {
 
       const serverDrop = data.drop as CatalogDrop;
       const rollWinner: CaseItem = {
-        id: serverDrop.id,
-        name: serverDrop.name,
-        rarity: serverDrop.rarity,
-        color: getRarityTextClass(serverDrop.rarity),
-        image: serverDrop.image,
-        price: serverDrop.price,
-        chance: serverDrop.probability,
-        caseId: currentCase.slug,
-        caseImage: currentCase.image,
+        id: serverDrop.id, name: serverDrop.name, rarity: serverDrop.rarity, color: getRarityTextClass(serverDrop.rarity), image: serverDrop.image,
+        price: serverDrop.price, chance: serverDrop.probability, caseId: currentCase.slug, caseImage: currentCase.image,
         inventoryItemId: data.item.id,
       };
 
-      const stableSlots = provisional.slots.map((slot, index) => index === provisional.winnerSlotIndex ? { ...rollWinner, slotUid: slot.slotUid } : slot);
-      setRouletteSlots(stableSlots);
-      setAnimationRequest({ id: crypto.randomUUID(), winnerIndex: provisional.winnerSlotIndex });
+      // The server result is the single source of truth. Build the track only
+      // after receiving it, so the roulette can never show a provisional winner
+      // and then replace the track underneath the player.
+      const track = buildRouletteSlots(currentSkins, rollWinner);
+      if (!track.slots.length) throw new Error("Не удалось подготовить рулетку");
+      setWinnerIndex(track.winnerSlotIndex);
+      setRouletteSlots(track.slots);
+      setAnimationRequest({ id: crypto.randomUUID(), winnerIndex: track.winnerSlotIndex });
     } catch (error) {
       setOpening(false);
       setAnimating(false);
@@ -229,9 +209,7 @@ export default function CasePage() {
     if (action === "sell") {
       try {
         const response = await fetch("/api/inventory/sell", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
           body: JSON.stringify({ inventoryItemId: winner.inventoryItemId }),
         });
         const data = await response.json().catch(() => null);
@@ -272,36 +250,11 @@ export default function CasePage() {
   return (
     <main className="min-h-screen bg-black px-4 py-10 text-white sm:px-6 sm:py-16">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-8 flex items-center justify-between">
-          <Link href="/" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-200 transition-transform duration-200 hover:scale-105 active:scale-95">← Назад</Link>
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-yellow-400">ZEONGGSTORE</p>
-          <h1 className="mt-3 break-words text-3xl font-black sm:text-5xl">{activeCaseName}</h1>
-          <p className="mt-4 text-gray-400">Открой кейс и попробуй получить редкий предмет.</p>
-        </div>
-        <div className="mt-10"><RecentDropsStrip title="Последние дропы" /></div>
-        <BestDrop bestDrop={bestDrop} />
-        <div className="mt-12 sm:mt-16">
-          <CaseRoulette
-            slots={rouletteSlots}
-            winnerIndex={winnerIndex}
-            revealWinner={revealWinner}
-            request={animationRequest}
-            resetToken={resetToken}
-            onAnimatingChange={setAnimating}
-            onFinished={finishRoll}
-          />
-        </div>
-        {!resultVisible && (
-          <div className="mt-10 text-center">
-            {openError && <p className="mb-4 text-sm font-semibold text-red-300">{openError}</p>}
-            <button type="button" onClick={() => void startCaseRoll()} disabled={opening || animating} aria-busy={opening || animating} className="group relative overflow-hidden rounded-2xl bg-yellow-400 px-10 py-4 text-lg font-black text-black shadow-[0_0_30px_rgba(250,204,21,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-yellow-300 hover:shadow-[0_0_42px_rgba(250,204,21,0.38)] active:translate-y-0 active:scale-95 disabled:cursor-wait disabled:opacity-70">
-              {(opening || animating) && <span className="absolute inset-y-0 left-[-40%] w-2/5 -skew-x-12 bg-white/35 blur-md animate-[shimmer_900ms_linear_infinite]" />}
-              <span className="relative">{opening || animating ? "Открываем..." : "Открыть кейс"}</span>
-            </button>
-          </div>
-        )}
+        <div className="mb-8 flex items-center justify-between"><Link href="/" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-200 transition-transform duration-200 hover:scale-105 active:scale-95">← Назад</Link></div>
+        <div className="text-center"><p className="text-sm font-semibold uppercase tracking-[0.3em] text-yellow-400">ZEONGGSTORE</p><h1 className="mt-3 break-words text-3xl font-black sm:text-5xl">{activeCaseName}</h1><p className="mt-4 text-gray-400">Открой кейс и попробуй получить редкий предмет.</p></div>
+        <div className="mt-10"><RecentDropsStrip title="Последние дропы" /></div><BestDrop bestDrop={bestDrop} />
+        <div className="mt-12 sm:mt-16"><CaseRoulette slots={rouletteSlots} winnerIndex={winnerIndex} revealWinner={revealWinner} request={animationRequest} resetToken={resetToken} onAnimatingChange={setAnimating} onFinished={finishRoll} /></div>
+        {!resultVisible && <div className="mt-10 text-center">{openError && <p className="mb-4 text-sm font-semibold text-red-300">{openError}</p>}<button type="button" onClick={() => void startCaseRoll()} disabled={opening || animating} aria-busy={opening || animating} className="group relative overflow-hidden rounded-2xl bg-yellow-400 px-10 py-4 text-lg font-black text-black shadow-[0_0_30px_rgba(250,204,21,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-yellow-300 hover:shadow-[0_0_42px_rgba(250,204,21,0.38)] active:translate-y-0 active:scale-95 disabled:cursor-wait disabled:opacity-70">{(opening || animating) && <span className="absolute inset-y-0 left-[-40%] w-2/5 -skew-x-12 bg-white/35 blur-md animate-[shimmer_900ms_linear_infinite]" />}<span className="relative">{opening || animating ? "Открываем..." : "Открыть кейс"}</span></button></div>}
         {winner && resultVisible && <WinnerModal winner={winner} resultClosing={resultClosing} resultAction={resultAction} onAction={handleResultAction} onOpenAgain={handleOpenAgain} />}
         <CaseDropList activeCase={activeCase} expandedChanceCardId={expandedChanceCardId} onToggle={(id) => setExpandedChanceCardId((current) => current === id ? null : id)} />
       </div>
