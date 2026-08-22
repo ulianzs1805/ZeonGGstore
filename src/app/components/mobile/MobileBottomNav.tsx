@@ -43,6 +43,11 @@ export default function MobileBottomNav() {
   const [balance, setBalance] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // The Beta gate is intentionally isolated from the storefront UI.
+  if (pathname === "/beta" || pathname.startsWith("/beta/")) {
+    return null;
+  }
+
   useEffect(() => {
     const loadBalance = async () => {
       if (!session) {
