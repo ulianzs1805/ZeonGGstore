@@ -2,28 +2,48 @@
 
 import type { Role, Section } from "../types/admin";
 
-export type AdminNavItem = { id: Section; label: string; visible: boolean };
+export type AdminNavItem = {
+  id: Section;
+  label: string;
+  visible: boolean;
+};
+
+const ADMIN_SECTIONS: AdminNavItem[] = [
+  { id: "dashboard", label: "Обзор", visible: true },
+  { id: "create", label: "Создать кейс", visible: true },
+  { id: "cases", label: "Управление кейсами", visible: true },
+  { id: "drops", label: "Дропы", visible: true },
+  { id: "users", label: "Пользователи", visible: true },
+  { id: "roles", label: "Выдать роль", visible: false },
+  { id: "support", label: "Поддержка", visible: true },
+  { id: "myAudit", label: "Мои действия", visible: true },
+  { id: "economy", label: "Экономика", visible: false },
+  { id: "transactions", label: "Транзакции", visible: false },
+  { id: "zcoin", label: "Z-Coin", visible: false },
+  { id: "console", label: "Dev Console", visible: false },
+  { id: "audit", label: "Audit Logs", visible: false },
+  { id: "force", label: "Force Drop / Test Drop", visible: false },
+  { id: "skinPrices", label: "Стоимость скинов", visible: false },
+  { id: "tester", label: "Tester Tools", visible: false },
+  { id: "tools", label: "Developer Tools", visible: false },
+];
 
 export function getAdminSections(role: Role): AdminNavItem[] {
-  return [
-    { id: "dashboard", label: "Обзор", visible: true },
-    { id: "create", label: "Создать кейс", visible: true },
-    { id: "cases", label: "Управление кейсами", visible: true },
-    { id: "drops", label: "Дропы", visible: true },
-    { id: "users", label: "Пользователи", visible: true },
-    { id: "roles", label: "Выдать роль", visible: role === "DEV" || role === "NPN1_DEV" },
-    { id: "support", label: "Поддержка", visible: true },
-    { id: "myAudit", label: "Мои действия", visible: true },
-    { id: "economy", label: "Экономика", visible: role !== "ADMIN" },
-    { id: "transactions", label: "Транзакции", visible: role !== "ADMIN" },
-    { id: "zcoin", label: "Z-Coin", visible: role !== "ADMIN" },
-    { id: "console", label: "Dev Console", visible: role !== "ADMIN" },
-    { id: "audit", label: "Audit Logs", visible: role !== "ADMIN" },
-    { id: "force", label: "Force Drop / Test Drop", visible: role === "NPN1_DEV" },
-    { id: "skinPrices", label: "Стоимость скинов", visible: role === "DEV" || role === "NPN1_DEV" },
-    { id: "tester", label: "Tester Tools", visible: role === "TESTER" || role === "DEV" || role === "NPN1_DEV" },
-    { id: "tools", label: "Developer Tools", visible: role !== "ADMIN" },
-  ].filter((item) => item.visible);
+  return ADMIN_SECTIONS.map((item) => ({
+    ...item,
+    visible:
+      item.id === "roles"
+        ? role === "DEV" || role === "NPN1_DEV"
+        : item.id === "economy" || item.id === "transactions" || item.id === "zcoin" || item.id === "console" || item.id === "audit" || item.id === "tools"
+          ? role !== "ADMIN"
+          : item.id === "force"
+            ? role === "NPN1_DEV"
+            : item.id === "skinPrices"
+              ? role === "DEV" || role === "NPN1_DEV"
+              : item.id === "tester"
+                ? role === "TESTER" || role === "DEV" || role === "NPN1_DEV"
+                : item.visible,
+  })).filter((item) => item.visible);
 }
 
 export function AdminNavigation({ items, section, onChange }: { items: AdminNavItem[]; section: Section; onChange: (section: Section) => void }) {
