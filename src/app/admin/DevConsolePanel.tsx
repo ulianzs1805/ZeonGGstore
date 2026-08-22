@@ -18,6 +18,13 @@ export default function DevConsolePanel() {
       const response = await fetch("/api/admin/dev-console", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: value }) });
       const data = await response.json().catch(() => null);
       setHistory((current) => [...current, { command: value, output: response.ok ? JSON.stringify(data, null, 2) : data?.error || "Команда отклонена", success: response.ok }].slice(-20));
+
+      // Header already listens to this event. Emit it immediately after a successful
+      // Z Coin command so a self-balance change is reflected without page reload.
+      if (response.ok && /^zcoin\s+(grant|revoke)\s+/i.test(value)) {
+        window.dispatchEvent(new Event("zeon-profile-updated"));
+      }
+
       setCommand("");
     } finally {
       setBusy(false);
