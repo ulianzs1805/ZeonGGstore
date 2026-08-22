@@ -30,26 +30,25 @@ export async function POST(request: Request) {
   if (!access.user) return access.response;
   const body = await request.json().catch(() => null);
   const targetUserId = typeof body?.targetUserId === "string" ? body.targetUserId : "";
-  const nextRole = body?.role === "USER" || body?.role === "ADMIN" || body?.role === "DEV" ? body.role : "";
+  const nextRole = body?.role === "USER" || body?.role === "ADMIN" ? body.role : "";
   const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
   if (!targetUserId || !nextRole || reason.length < 5) return NextResponse.json({ error: "Укажите пользователя, разрешённую роль и причину от 5 символов." }, { status: 400 });
   if (targetUserId === access.user.id) return NextResponse.json({ error: "Нельзя изменять собственную роль." }, { status: 403 });
-  if (nextRole === "DEV" && access.user.role !== "NPN1_DEV") return NextResponse.json({ error: "Только NPN1_DEV может назначать DEV." }, { status: 403 });
   const target = await prisma.user.findUnique({ where: { id: targetUserId }, include: { adminProfile: true, devProfile: true } });
   if (!target || target.role === "NPN1_DEV") return NextResponse.json({ error: "Пользователь не найден или системная роль защищена." }, { status: 404 });
-  if (access.user.role === "DEV" && (target.role === "DEV" || nextRole === "DEV")) return NextResponse.json({ error: "DEV может изменять только USER и ADMIN." }, { status: 403 });
+  if (nextRole === "ADMIN" && !["DEV", "NPN1_DEV"].includes(access.user.role)) return NextResponse.json({ error: "Недостаточно прав для назначения ADMIN." }, { status: 403 });
+  if (access.user.role === "DEV" && target.role !== "USER" && nextRole === "ADMIN") return NextResponse.json({ error: "DEV может назначить ADMIN только обычному USER." }, { status: 403 });
   const oldRole = target.role;
   const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({ where: { id: target.id }, data: { role: nextRole } });
     if (nextRole === "ADMIN") await tx.adminProfile.upsert({ where: { userId: target.id }, update: {}, create: { userId: target.id, adminId: await uniqueStaffId(tx, "ADMIN") } });
-    if (nextRole === "DEV") await tx.devProfile.upsert({ where: { userId: target.id }, update: {}, create: { userId: target.id, devId: await uniqueStaffId(tx, "DEV") } });
     const actorAdminProfile = access.user!.role === "ADMIN"
       ? await tx.adminProfile.findUnique({ where: { userId: access.user!.id }, select: { adminId: true } })
       : null;
     const actorDevProfile = access.user!.role !== "ADMIN"
       ? await tx.devProfile.findUnique({ where: { userId: access.user!.id }, select: { devId: true } })
       : null;
-    await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: actorAdminProfile?.adminId ?? actorDevProfile?.devId ?? null, action: nextRole === "USER" ? "ROLE_REVOKED" : oldRole === "USER" ? "ROLE_GRANTED" : "ROLE_CHANGED", targetType: "USER", targetId: target.id, metadata: JSON.stringify({ targetEmail: target.email, oldRole, newRole: nextRole, reason }), status: "SUCCESS" } });
+    await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: actorAdminProfile?.adminId ?? actorDevProfile?.devId ?? null, action: nextRole === "USER" ? "ROLE_REVOKED" : oldRole === "USER" ? "ROLE_GRANTED" : "ROLE_CHANGED", targetType: "USER", targetId: target.id, metadata: JSON.stringify({ targetEmail: target.email, oldRole, newRole: nextRole, reason, source: "ROLE_MANAGEMENT_PANEL" }), status: "SUCCESS" } });
     return updated;
   });
   return NextResponse.json({ user: result });
