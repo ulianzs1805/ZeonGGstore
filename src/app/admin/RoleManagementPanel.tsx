@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 type User = { id: string; name: string | null; email: string; role: string; staffId: string | null };
-export default function RoleManagementPanel({ role }: { role: "DEV" | "NPN1_DEV" }) {
+export default function RoleManagementPanel({ role = "DEV" }: { role?: "DEV" | "NPN1_DEV" }) {
   const [search, setSearch] = useState(""); const [users, setUsers] = useState<User[]>([]); const [target, setTarget] = useState<User | null>(null); const [reason, setReason] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   useEffect(() => { if (search.length < 2) { setUsers([]); return; } const timer = window.setTimeout(() => { void fetch(`/api/admin/roles?search=${encodeURIComponent(search)}`).then((response) => response.json()).then((data) => setUsers(data.users ?? [])); }, 250); return () => window.clearTimeout(timer); }, [search]);
   const assign = async (nextRole: "USER" | "ADMIN") => { if (!target) return; setBusy(true); const response = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetUserId: target.id, role: nextRole, reason }) }); const data = await response.json().catch(() => null); setMessage(response.ok ? "Роль успешно изменена." : data?.error || "Изменение роли отклонено."); setBusy(false); };
