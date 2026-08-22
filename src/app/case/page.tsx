@@ -96,6 +96,18 @@ export default function CasePage() {
     };
   }, []);
 
+  // Preload a static-looking strip as soon as the case is available. The strip is replaced
+  // with the server-winner track only when the player actually opens the case.
+  useEffect(() => {
+    if (!activeCase || !caseSkins.length || opening || animating || resultVisible || animationRequest) return;
+    const currentCaseId = rouletteSlots[0]?.caseId;
+    if (rouletteSlots.length && currentCaseId === activeCase.slug) return;
+    const preview = buildRouletteSlots(caseSkins);
+    setRouletteSlots(preview.slots);
+    setWinnerIndex(null);
+    setRevealWinner(false);
+  }, [activeCase?.id, activeCase?.slug, opening, animating, resultVisible, animationRequest, rouletteSlots.length, rouletteSlots[0]?.caseId]);
+
   const finishRoll = () => {
     const index = animationRequest?.winnerIndex;
     if (index === undefined || index === null || !rouletteSlots[index]) return;
@@ -150,7 +162,6 @@ export default function CasePage() {
     setResultAction(null);
     setAnimating(false);
     setAnimationRequest(null);
-    setRouletteSlots([]);
     setResetToken((value) => value + 1);
 
     try {
@@ -195,7 +206,6 @@ export default function CasePage() {
       setResultAction(null);
       setAnimationRequest(null);
       setResetToken((value) => value + 1);
-      setRouletteSlots([]);
     }, 250);
   };
 
