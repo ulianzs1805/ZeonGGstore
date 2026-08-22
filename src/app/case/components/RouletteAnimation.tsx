@@ -115,16 +115,20 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
   }, [clearAnimationListeners]);
 
   return (
-    <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-zinc-950 p-3 shadow-[0_30px_80px_rgba(0,0,0,0.8)] sm:p-8">
-      <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
-        <div className="h-0 w-0 border-l-[10px] border-r-[10px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300" />
+    <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[#0b1018] p-2 shadow-[0_30px_80px_rgba(0,0,0,0.8)] sm:p-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-20 bg-gradient-to-b from-white/[0.025] to-transparent" />
+      <div className="pointer-events-none absolute left-1/2 top-0 z-40 -translate-x-1/2">
+        <div className="h-0 w-0 border-l-[16px] border-r-[16px] border-t-[24px] border-l-transparent border-r-transparent border-t-yellow-300 drop-shadow-[0_6px_14px_rgba(250,204,21,0.45)]" />
       </div>
-      <div ref={viewportRef} className="overflow-hidden rounded-[24px] border border-white/5 bg-black/20">
+      <div className="pointer-events-none absolute left-1/2 top-[23px] z-30 h-[calc(100%-23px)] w-px -translate-x-1/2 bg-gradient-to-b from-yellow-200/35 via-transparent to-transparent" />
+      <div ref={viewportRef} className="relative overflow-hidden rounded-[24px] border border-white/[0.055] bg-black/30 py-3 sm:py-5">
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-16 bg-gradient-to-r from-[#0b1018] via-[#0b1018]/55 to-transparent sm:w-28" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-16 bg-gradient-to-l from-[#0b1018] via-[#0b1018]/55 to-transparent sm:w-28" />
         <div ref={trackRef} className="flex" style={{ gap: "14px", willChange: "transform" }}>
           {slots.map((item, index) => {
             const isWinner = revealWinner && winnerIndex === index;
             return (
-              <div key={item.slotUid ?? `${item.id}-${index}`} style={{ opacity: revealWinner && !isWinner ? 0.28 : 1 }}>
+              <div key={item.slotUid ?? `${item.id}-${index}`} className="relative transition-opacity duration-300" style={{ opacity: revealWinner && !isWinner ? 0.28 : 1 }}>
                 <DropCard item={item} winner={isWinner} />
               </div>
             );
