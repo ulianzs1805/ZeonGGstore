@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import MobileBottomNav from "./components/mobile/MobileBottomNav";
+import AppChrome from "./components/layout/AppChrome";
 
 export const metadata: Metadata = {
   title: "ZeonGGStore",
@@ -17,8 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <Providers>
-          <div className="min-h-screen pb-24 md:pb-0">{children}</div>
-          <MobileBottomNav />
+          <AppChrome>{children}</AppChrome>
         </Providers>
       </body>
     </html>
