@@ -7,7 +7,10 @@ import type { CatalogCase } from "../lib/types";
 type Props = { activeCase: CatalogCase | null; expandedChanceCardId: string | null; onToggle: (id: string) => void };
 
 export default function CaseDropList({ activeCase, expandedChanceCardId, onToggle }: Props) {
-  const drops = activeCase?.drops ?? [];
+  const drops = (activeCase?.drops ?? []).filter((item, index, all) =>
+    all.findIndex((candidate) => candidate.id === item.id || (candidate.name === item.name && candidate.image === item.image)) === index,
+  );
+
   return (
     <section className="mt-12 rounded-[28px] border border-white/8 bg-[#0b1017]/80 p-4 sm:p-6">
       <div className="mb-6">
