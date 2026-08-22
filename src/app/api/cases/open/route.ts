@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { validateChances } from "@/lib/economy-guard";
 import { withFinalProbabilities } from "@/lib/price-weighted-chances";
 import { ensureSystemCatalog } from "@/lib/system-catalog";
+import { getOptimizedSkinImage } from "@/lib/optimized-skin-image";
 
 function pickDrop<T extends { probability: number }>(drops: T[]): T {
   const point = (randomInt(0, 1000000) / 1000000) * 100;
@@ -90,5 +91,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Не удалось открыть кейс" }, { status: 500 });
   }
 
-  return NextResponse.json(result, { status: 201 });
+  return NextResponse.json({
+    ...result,
+    drop: {
+      ...result.drop,
+      image: getOptimizedSkinImage(result.drop.image),
+    },
+  }, { status: 201 });
 }
