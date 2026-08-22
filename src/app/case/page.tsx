@@ -86,17 +86,6 @@ export default function CasePage() {
       .catch((error: unknown) => setOpenError(error instanceof Error ? error.message : "Не удалось загрузить каталог кейсов"));
   }, []);
 
-  // Do not regenerate the track when the server result finishes the animation.
-  // The old condition rebuilt the whole roulette as soon as `opening` became
-  // false and `animationRequest` became null, so the cards next to the winner
-  // visibly changed after the spin. Slots are rebuilt only when the case is
-  // closed/opened again.
-  useEffect(() => {
-    if (caseSkins.length && !opening && !animationRequest && !resultVisible) {
-      setRouletteSlots(buildRouletteSlots(caseSkins).slots);
-    }
-  }, [caseSkins.length, activeCase?.id, opening, animationRequest, resultVisible]);
-
   useEffect(() => {
     const sync = () => setBestDrop(readBestDrop());
     sync();
@@ -162,15 +151,8 @@ export default function CasePage() {
     setResultAction(null);
     setAnimating(false);
     setAnimationRequest(null);
+    setRouletteSlots([]);
     setResetToken((value) => value + 1);
-
-    const provisional = buildRouletteSlots(currentSkins);
-    if (!provisional.winner) {
-      setOpening(false);
-      setOpenError("В кейсе нет доступного дропа");
-      return;
-    }
-    setRouletteSlots(provisional.slots);
 
     try {
       const response = await fetch("/api/cases/open", {
@@ -189,9 +171,14 @@ export default function CasePage() {
         inventoryItemId: data.item.id,
       };
 
-      const stableSlots = provisional.slots.map((slot, index) => index === provisional.winnerSlotIndex ? { ...rollWinner, slotUid: slot.slotUid } : slot);
-      setRouletteSlots(stableSlots);
-      setAnimationRequest({ id: crypto.randomUUID(), winnerIndex: provisional.winnerSlotIndex });
+      // The server result is the single source of truth. Build the track only
+      // after receiving it, so the roulette can never show a provisional winner
+      // and then replace the track underneath the player.
+      const track = buildRouletteSlots(currentSkins, rollWinner);
+      if (!track.slots.length) throw new Error("Не удалось подготовить рулетку");
+      setWinnerIndex(track.winnerSlotIndex);
+      setRouletteSlots(track.slots);
+      setAnimationRequest({ id: crypto.randomUUID(), winnerIndex: track.winnerSlotIndex });
     } catch (error) {
       setOpening(false);
       setAnimating(false);
