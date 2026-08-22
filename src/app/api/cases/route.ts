@@ -10,8 +10,9 @@ export async function GET() {
   try {
     await ensureSystemCatalog(prisma);
 
+    // Public listing: only show SYSTEM/production cases.
     const cases = await prisma.case.findMany({
-      where: { isActive: true },
+      where: { isActive: true, environment: "SYSTEM" },
       include: {
         drops: {
           orderBy: { createdAt: "asc" },
