@@ -340,8 +340,7 @@ export default function CasePage() {
               <div className="relative flex h-[300px] items-center justify-center sm:h-[390px]"><span className="text-sm text-slate-500">Картинка кейса загружается...</span></div>
             )}
             <div className="relative -mt-2 text-center sm:-mt-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.34em] text-purple-200/70">Сейчас открываешь</p>
-              <p className="mt-2 text-2xl font-black text-white sm:text-3xl">{activeCaseName}</p>
+              <p className="text-2xl font-black text-white sm:text-3xl">{activeCaseName}</p>
             </div>
           </div>
 
@@ -357,7 +356,7 @@ export default function CasePage() {
 
         <section className="mt-8 sm:mt-10">
           <div className="mb-3 flex items-center justify-between gap-4 px-1">
-            <div><p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Рулетка</p><h2 className="mt-1 text-lg font-black text-white">Возможный результат уже перед тобой</h2></div>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Рулетка</p>
             <span className="hidden text-xs font-semibold text-slate-500 sm:block">Указатель всегда стоит по центру</span>
           </div>
           <CaseRoulette slots={rouletteSlots} winnerIndex={winnerIndex} revealWinner={revealWinner} request={animationRequest} resetToken={resetToken} onAnimatingChange={setAnimating} onFinished={finishRoll} />
