@@ -15,7 +15,17 @@ export default function DropCard({ item, winner = false }: { item: CaseItem; win
     >
       {winner && <div className="pointer-events-none absolute inset-0 rounded-[22px] bg-yellow-300/10 blur-xl" />}
       <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[18px]">
-        <Image src={item.image} alt={item.name} fill className="object-contain" sizes="112px" unoptimized priority={winner} />
+        <Image
+          src={item.image}
+          alt={item.name}
+          fill
+          className="object-contain"
+          sizes="112px"
+          unoptimized
+          loading="eager"
+          priority={winner}
+          draggable={false}
+        />
       </div>
       <h3 className={`mt-3 text-center font-black ${item.color}`}>{item.name}</h3>
       <p className="mt-1 text-[11px] font-medium uppercase text-slate-200/80">{item.rarity}</p>
