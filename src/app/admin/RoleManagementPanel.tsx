@@ -3,9 +3,136 @@
 import { useEffect, useState } from "react";
 
 type User = { id: string; name: string | null; email: string; role: string; staffId: string | null };
+
 export default function RoleManagementPanel({ role = "DEV" }: { role?: "DEV" | "NPN1_DEV" }) {
-  const [search, setSearch] = useState(""); const [users, setUsers] = useState<User[]>([]); const [target, setTarget] = useState<User | null>(null); const [reason, setReason] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
-  useEffect(() => { if (search.length < 2) { setUsers([]); return; } const timer = window.setTimeout(() => { void fetch(`/api/admin/roles?search=${encodeURIComponent(search)}`).then((response) => response.json()).then((data) => setUsers(data.users ?? [])); }, 250); return () => window.clearTimeout(timer); }, [search]);
-  const assign = async (nextRole: "USER" | "ADMIN" | "DEV") => { if (!target) return; setBusy(true); const response = await fetch("/api/admin/roles", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetUserId: target.id, role: nextRole, reason }) }); const data = await response.json().catch(() => null); setMessage(response.ok ? "Роль успешно изменена." : data?.error || "Изменение роли отклонено."); setBusy(false); };
+  const [search, setSearch] = useState("");
+  const [users, setUsers] = useState<User[]>([]);
+  const [target, setTarget] = useState<User | null>(null);
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (search.length < 2) {
+      setUsers([]);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/admin/roles?search=${encodeURIComponent(search)}`)
+        .then((response) => response.json())
+        .then((data) => setUsers(data.users ?? []));
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const assign = async (nextRole: "USER" | "ADMIN" | "DEV") => {
+    if (!target) return;
+
+    setBusy(true);
+    const response = await fetch("/api/admin/roles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId: target.id, role: nextRole, reason }),
+    });
+    const data = await response.json().catch(() => null);
+    setMessage(response.ok ? "Роль успешно изменена." : data?.error || "Изменение роли отклонено.");
+    setBusy(false);
+  };
+
   const allowed = (nextRole: "ADMIN" | "DEV") => nextRole === "ADMIN" || role === "NPN1_DEV";
-  return <div className="space-y-4"><div><h2 className="text-2xl font-black">Выдать ADMIN / DEV</h2><p className="mt-2 text-sm text-slate-400">Staff ID генерируется сервером. NPN1 не назначается через этот интерфейс.</p></div><input value={target ? target.email : search} onChange={(event) => { setTarget(null); setSearch(event.target.value); }} placeholder="Google email, User ID или имя" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm" />{users.length > 0 && <div className="space-y-1">{users.map((user) => <button key={user.id} type="button" onClick={() => { setTarget(user); setUsers([]); }} className="block w-full rounded-lg border border-white/10 p-3 text-left text-sm hover:border-violet-300/40">{user.name || user.email} · {user.email} · {user.role} · {user.staffId ?? "без Staff ID"}</button>)}</div>}{target && <div className="rounded-2xl border border-violet-300/20 bg-violet-400/5 p-4"><p className="font-bold">{target.name || "—"}</p><p className="text-sm text-slate-300">{target.email}</p><p className="text-xs text-slate-400">User ID: {target.id} · Текущая роль: {target.role}</p><textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Причина изменения (минимум 5 символов)" className="mt-4 min-h-20 w-full rounded-xl border border-white/10 bg-black/20 p-3 text-sm" /><div className="mt-3 flex flex-wrap gap-2">{allowed("ADMIN") && <button type="button" disabled={busy || reason.trim().length < 5} onClick={() => void assign("ADMIN")} className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-bold disabled:opacity-40">Выдать ZEON ADMIN</button>}{allowed("DEV") && <button type="button" disabled={busy || reason.trim().length < 5} onClick={() => void assign("DEV")} className="rounded-xl bg-fuchsia-500 px-4 py-2.5 text-sm font-bold disabled:opacity-40">Выдать ZEON DEV</button>}<button type="button" disabled={busy || reason.trim().length < 5} onClick={() => void assign("USER")} className="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-bold disabled:opacity-40">Снять роль</button></div></div>}{message && <p className="rounded-xl border border-white/10 p-3 text-sm text-slate-300">{message}</p>}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-black">Выдать ADMIN / DEV</h2>
+        <p className="mt-2 text-sm text-slate-400">
+          Staff ID генерируется сервером. NPN1 не назначается через этот интерфейс.
+        </p>
+      </div>
+
+      <input
+        value={target ? target.email : search}
+        onChange={(event) => {
+          setTarget(null);
+          setSearch(event.target.value);
+        }}
+        placeholder="Google email, User ID или имя"
+        className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm"
+      />
+
+      {users.length > 0 && (
+        <div className="space-y-1">
+          {users.map((user) => (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => {
+                setTarget(user);
+                setUsers([]);
+              }}
+              className="block w-full rounded-lg border border-white/10 p-3 text-left text-sm hover:border-violet-300/40"
+            >
+              {user.name || user.email} · {user.email} · {user.role} · {user.staffId ?? "без Staff ID"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {target && (
+        <div className="rounded-2xl border border-violet-300/20 bg-violet-400/5 p-4">
+          <p className="font-bold">{target.name || "—"}</p>
+          <p className="text-sm text-slate-300">{target.email}</p>
+          <p className="text-xs text-slate-400">
+            User ID: {target.id} · Текущая роль: {target.role}
+          </p>
+
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Причина изменения (минимум 5 символов)"
+            className="mt-4 min-h-20 w-full rounded-xl border border-white/10 bg-black/20 p-3 text-sm"
+          />
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {allowed("ADMIN") && (
+              <button
+                type="button"
+                disabled={busy || reason.trim().length < 5}
+                onClick={() => void assign("ADMIN")}
+                className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-bold disabled:opacity-40"
+              >
+                Выдать ZEON ADMIN
+              </button>
+            )}
+
+            {allowed("DEV") && (
+              <button
+                type="button"
+                disabled={busy || reason.trim().length < 5}
+                onClick={() => void assign("DEV")}
+                className="rounded-xl bg-fuchsia-500 px-4 py-2.5 text-sm font-bold disabled:opacity-40"
+              >
+                Выдать ZEON DEV
+              </button>
+            )}
+
+            <button
+              type="button"
+              disabled={busy || reason.trim().length < 5}
+              onClick={() => void assign("USER")}
+              className="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-bold disabled:opacity-40"
+            >
+              Снять роль
+            </button>
+          </div>
+        </div>
+      )}
+
+      {message && (
+        <p className="rounded-xl border border-white/10 p-3 text-sm text-slate-300">{message}</p>
+      )}
+    </div>
+  );
+}
