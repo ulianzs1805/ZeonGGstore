@@ -96,6 +96,15 @@ export default function CasePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeCase || !caseSkins.length || rouletteSlots.length || opening || animating || resultVisible) return;
+    const preview = buildRouletteSlots(caseSkins);
+    if (!preview.slots.length) return;
+    setWinnerIndex(null);
+    setRevealWinner(false);
+    setRouletteSlots(preview.slots);
+  }, [activeCase, caseSkins, rouletteSlots.length, opening, animating, resultVisible]);
+
   const finishRoll = () => {
     const index = animationRequest?.winnerIndex;
     if (index === undefined || index === null || !rouletteSlots[index]) return;
