@@ -18,6 +18,25 @@ export type DropDraft = {
   probability: number;
 };
 
+export type Section =
+  | "dashboard"
+  | "create"
+  | "cases"
+  | "drops"
+  | "support"
+  | "users"
+  | "roles"
+  | "myAudit"
+  | "audit"
+  | "economy"
+  | "transactions"
+  | "zcoin"
+  | "console"
+  | "force"
+  | "tools"
+  | "tester"
+  | "skinPrices";
+
 export type CatalogCase = {
   id: string;
   slug: string;
