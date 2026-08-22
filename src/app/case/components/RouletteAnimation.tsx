@@ -2,7 +2,6 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import DropCard from "./DropCard";
-import { CARD_STEP, CARD_WIDTH, TRACK_GAP } from "../lib/roulette";
 import type { CaseItem, RouletteAnimationRequest } from "../lib/types";
 
 export type RouletteAnimationHandle = { reset: () => void };
@@ -29,7 +28,6 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
   const activeAnimationRef = useRef<string | null>(null);
   const finishedAnimationRef = useRef<string | null>(null);
   const finishRef = useRef(onFinished);
-  const animatingRef = useRef(false);
 
   useEffect(() => {
     finishRef.current = onFinished;
@@ -37,9 +35,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
 
   const clearAnimationListeners = () => {
     const wheel = trackRef.current;
-    if (wheel && handlerRef.current) {
-      wheel.removeEventListener("transitionend", handlerRef.current);
-    }
+    if (wheel && handlerRef.current) wheel.removeEventListener("transitionend", handlerRef.current);
     handlerRef.current = null;
     if (fallbackRef.current !== null) {
       window.clearTimeout(fallbackRef.current);
@@ -51,7 +47,6 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     const wheel = trackRef.current;
     clearAnimationListeners();
     activeAnimationRef.current = null;
-    animatingRef.current = false;
     onAnimatingChange(false);
     if (!wheel) return;
     wheel.style.transition = "none";
@@ -77,14 +72,22 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     const index = request.winnerIndex;
     if (index < 0 || index >= slots.length) return;
 
+    const card = wheel.children[index] as HTMLElement | undefined;
+    if (!card) return;
+
     requestIdRef.current = request.id;
     finishedAnimationRef.current = null;
     reset();
     activeAnimationRef.current = request.id;
 
-    const viewportCenter = viewport.clientWidth / 2;
-    const winnerCenter = index * CARD_STEP + CARD_WIDTH / 2;
-    const target = Math.max(0, winnerCenter - viewportCenter);
+    // Use the actual rendered card and viewport geometry. The old code used
+    // fixed CARD_WIDTH/CARD_STEP values, which could leave the pointer over
+    // a different card when the rendered layout differed by a few pixels.
+    const viewportRect = viewport.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const viewportCenter = viewportRect.left + viewportRect.width / 2;
+    const cardCenter = cardRect.left + cardRect.width / 2;
+    const target = Math.max(0, cardCenter - viewportCenter);
     let finished = false;
 
     const finish = () => {
@@ -94,7 +97,6 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
       finishedAnimationRef.current = request.id;
       activeAnimationRef.current = null;
       clearAnimationListeners();
-      animatingRef.current = false;
       onAnimatingChange(false);
       finishRef.current();
     };
@@ -106,7 +108,6 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
 
     handlerRef.current = handler;
     wheel.addEventListener("transitionend", handler);
-    animatingRef.current = true;
     onAnimatingChange(true);
 
     requestAnimationFrame(() => {
@@ -120,7 +121,6 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
   useEffect(() => () => {
     clearAnimationListeners();
     activeAnimationRef.current = null;
-    animatingRef.current = false;
   }, []);
 
   return (
@@ -129,7 +129,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
         <div className="h-0 w-0 border-l-[10px] border-r-[10px] border-t-[14px] border-l-transparent border-r-transparent border-t-yellow-300" />
       </div>
       <div ref={viewportRef} className="overflow-hidden rounded-[24px] border border-white/5 bg-black/20">
-        <div ref={trackRef} className="flex" style={{ gap: `${TRACK_GAP}px`, willChange: "transform" }}>
+        <div ref={trackRef} className="flex" style={{ gap: "14px", willChange: "transform" }}>
           {slots.map((item, index) => {
             const isWinner = revealWinner && winnerIndex === index;
             return (
