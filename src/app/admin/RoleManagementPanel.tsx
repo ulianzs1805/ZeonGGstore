@@ -41,14 +41,12 @@ export default function RoleManagementPanel({ role = "DEV" }: { role?: "DEV" | "
     setBusy(false);
   };
 
-  const allowed = (nextRole: "ADMIN" | "DEV") => nextRole === "ADMIN" || role === "NPN1_DEV";
-
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-2xl font-black">Выдать ADMIN / DEV</h2>
+        <h2 className="text-2xl font-black">Управление ролями</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Staff ID генерируется сервером. NPN1 не назначается через этот интерфейс.
+          DEV может назначать ADMIN. Назначение DEV доступно только NPN1_DEV. NPN1_DEV не назначается через интерфейс.
         </p>
       </div>
 
@@ -96,18 +94,16 @@ export default function RoleManagementPanel({ role = "DEV" }: { role?: "DEV" | "
           />
 
           <div className="mt-3 flex flex-wrap gap-2">
-            {allowed("ADMIN") && (
-              <button
-                type="button"
-                disabled={busy || reason.trim().length < 5}
-                onClick={() => void assign("ADMIN")}
-                className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-bold disabled:opacity-40"
-              >
-                Выдать ZEON ADMIN
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={busy || reason.trim().length < 5}
+              onClick={() => void assign("ADMIN")}
+              className="rounded-xl bg-violet-500 px-4 py-2.5 text-sm font-bold disabled:opacity-40"
+            >
+              Выдать ZEON ADMIN
+            </button>
 
-            {allowed("DEV") && (
+            {role === "NPN1_DEV" && (
               <button
                 type="button"
                 disabled={busy || reason.trim().length < 5}
