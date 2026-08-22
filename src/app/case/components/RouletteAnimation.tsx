@@ -1,7 +1,8 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import DropCard from "./DropCard";
+import { CARD_STEP, CARD_WIDTH } from "../lib/roulette";
 import type { CaseItem, RouletteAnimationRequest } from "../lib/types";
 
 export type RouletteAnimationHandle = { reset: () => void };
@@ -33,7 +34,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     finishRef.current = onFinished;
   }, [onFinished]);
 
-  const clearAnimationListeners = () => {
+  const clearAnimationListeners = useCallback(() => {
     const wheel = trackRef.current;
     if (wheel && handlerRef.current) wheel.removeEventListener("transitionend", handlerRef.current);
     handlerRef.current = null;
@@ -41,9 +42,9 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
       window.clearTimeout(fallbackRef.current);
       fallbackRef.current = null;
     }
-  };
+  }, []);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     const wheel = trackRef.current;
     clearAnimationListeners();
     activeAnimationRef.current = null;
@@ -52,15 +53,15 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     wheel.style.transition = "none";
     wheel.style.transform = "translate3d(0,0,0)";
     void wheel.offsetWidth;
-  };
+  }, [clearAnimationListeners, onAnimatingChange]);
 
-  useImperativeHandle(ref, () => ({ reset }), []);
+  useImperativeHandle(ref, () => ({ reset }), [reset]);
 
   useEffect(() => {
     reset();
     requestIdRef.current = null;
     finishedAnimationRef.current = null;
-  }, [resetToken]);
+  }, [resetToken, reset]);
 
   useEffect(() => {
     if (!request || !slots.length || request.id === requestIdRef.current) return;
@@ -72,19 +73,12 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     const index = request.winnerIndex;
     if (index < 0 || index >= slots.length) return;
 
-    const card = wheel.children[index] as HTMLElement | undefined;
-    if (!card) return;
-
     requestIdRef.current = request.id;
     finishedAnimationRef.current = null;
     reset();
     activeAnimationRef.current = request.id;
 
-    const viewportRect = viewport.getBoundingClientRect();
-    const cardRect = card.getBoundingClientRect();
-    const viewportCenter = viewportRect.left + viewportRect.width / 2;
-    const cardCenter = cardRect.left + cardRect.width / 2;
-    const target = Math.max(0, cardCenter - viewportCenter);
+    const target = Math.max(0, index * CARD_STEP + CARD_WIDTH / 2 - viewport.clientWidth / 2);
     let finished = false;
 
     const finish = () => {
@@ -113,12 +107,12 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
       wheel.style.transform = `translate3d(-${target}px,0,0)`;
       fallbackRef.current = window.setTimeout(finish, 4800);
     });
-  }, [request, slots.length]);
+  }, [request, slots.length, reset, clearAnimationListeners, onAnimatingChange]);
 
   useEffect(() => () => {
     clearAnimationListeners();
     activeAnimationRef.current = null;
-  }, []);
+  }, [clearAnimationListeners]);
 
   return (
     <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-zinc-950 p-3 shadow-[0_30px_80px_rgba(0,0,0,0.8)] sm:p-8">
