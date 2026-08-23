@@ -39,7 +39,7 @@ export default function MobileBottomNav() {
 
   const items: NavItem[] = [
     { label: "Кейсы", href: "/#cases", icon: <IconCases /> },
-    { label: "Бонусы", href: "/#bonuses", icon: <IconBonus /> },
+    { label: "Бонусы", href: "/bonuses", icon: <IconBonus /> },
     { label: "Инвентарь", href: "/account/inventory", icon: <IconInventory /> },
   ];
 
@@ -47,7 +47,7 @@ export default function MobileBottomNav() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] h-28 bg-gradient-to-t from-[#05070b] via-[#05070b]/96 to-transparent md:hidden" />
     <nav className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[80] mx-auto flex h-[72px] max-w-[720px] items-center rounded-[28px] border border-white/10 bg-[#11131c]/95 p-1.5 shadow-[0_-8px_40px_rgba(0,0,0,0.38)] backdrop-blur-2xl md:hidden" aria-label="Мобильная навигация">
       <Link href={items[0].href!} className={itemClass(pathname === "/" || pathname.startsWith("/case"))}>{items[0].icon}<span>{items[0].label}</span></Link>
-      <Link href={items[1].href!} className={itemClass(false)}>{items[1].icon}<span>{items[1].label}</span></Link>
+      <Link href={items[1].href!} className={itemClass(pathname === "/bonuses" || pathname.startsWith("/bonuses/"))}>{items[1].icon}<span>{items[1].label}</span></Link>
       <Link href="/account" className="relative -mt-7 flex min-w-[86px] flex-1 flex-col items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-emerald-200"><span className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-emerald-200/30 bg-gradient-to-b from-emerald-300 to-emerald-500 text-[#06241f] shadow-[0_0_28px_rgba(74,222,128,0.28)]"><IconPlus /></span><span>{balance === null ? "Z" : `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(balance)} Z`}</span></Link>
       <Link href={items[2].href!} className={itemClass(pathname.startsWith("/account/inventory"))}>{items[2].icon}<span>{items[2].label}</span></Link>
       <button type="button" onClick={() => setMenuOpen(true)} className={itemClass(menuOpen)} aria-label="Открыть мобильное меню"><IconMenu /><span>Меню</span></button>
