@@ -12,7 +12,7 @@ export default function ImageUploadField({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  caseFolder: string;
+  caseFolder?: string;
 }) {
   const inputId = useId();
   const [uploading, setUploading] = useState(false);
@@ -24,15 +24,17 @@ export default function ImageUploadField({
     try {
       const formData = new FormData();
       formData.set("file", file);
-      formData.set("caseFolder", caseFolder);
-      const response = await fetch("/api/admin/uploads", { method: "POST", body: formData, cache: "no-store" });
+      if (caseFolder?.trim()) formData.set("caseFolder", caseFolder.trim());
+      const response = await fetch("/api/admin/uploads", {
+        method: "POST",
+        body: formData,
+        cache: "no-store",
+      });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.imageUrl) {
         setError(data?.error || "Не удалось загрузить изображение.");
         return;
       }
-      // Store the server URL exactly as returned by the upload API. Do not
-      // transform it here: the same stable URL is later used by the roulette.
       onChange(String(data.imageUrl));
     } catch {
       setError("Ошибка сети при загрузке изображения.");
