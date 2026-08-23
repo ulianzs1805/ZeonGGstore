@@ -1,5 +1,71 @@
 "use client";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+
 type CaseItem={id:string;name:string;slug:string};
-export default function PromoAdminPage(){const[type,setType]=useState<"CASE"|"ZCOIN">("CASE");const[code,setCode]=useState("");const[cases,setCases]=useState<CaseItem[]>([]);const[caseId,setCaseId]=useState("");const[z,setZ]=useState(100);const[activations,setActivations]=useState(10);const[expiresAt,setExpiresAt]=useState("");const[msg,setMsg]=useState("");const[loading,setLoading]=useState(false);useEffect(()=>{fetch("/api/promos",{credentials:"include",cache:"no-store"}).then(r=>r.json()).then(d=>{setCases(d.cases??[]);if(d.cases?.[0])setCaseId(d.cases[0].id);}).catch(()=>setMsg("Не удалось загрузить данные."));},[]);const submit=async(e:FormEvent)=>{e.preventDefault();setLoading(true);setMsg("");try{const r=await fetch("/api/promos",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({code,type,caseId,zCoinAmount:z,maxActivations:activations,expiresAt})});const d=await r.json().catch(()=>null);if(!r.ok)throw new Error(d?.error||"Не удалось создать промокод.");setMsg(`Промокод ${d.promo.code} создан.`);setCode("");}catch(err){setMsg(err instanceof Error?err.message:"Ошибка.");}finally{setLoading(false);}};return <main className="min-h-screen bg-slate-950 px-4 py-8 text-white"><div className="mx-auto max-w-2xl"><div className="mb-6 flex items-center justify-between"><Link href="/admin" className="rounded-lg border border-white/15 px-3 py-2 text-sm">← Админка</Link><span className="text-sm font-black text-violet-200">Промокоды</span></div><div className="rounded-3xl border border-white/10 bg-slate-900/60 p-5 sm:p-8"><h1 className="text-3xl font-black">Создать промокод</h1><p className="mt-2 text-sm text-slate-400">Выбери награду, количество активаций и срок действия.</p><form onSubmit={submit} className="mt-6 space-y-4"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={3} maxLength={40} placeholder="Код промокода" className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/><div className="grid grid-cols-2 gap-3"><button type="button" onClick={()=>setType("CASE")} className={`rounded-xl px-4 py-3 font-bold ${type==="CASE"?"bg-violet-600":"bg-black/30 border border-white/10"}`}>Кейс</button><button type="button" onClick={()=>setType("ZCOIN")} className={`rounded-xl px-4 py-3 font-bold ${type==="ZCOIN"?"bg-violet-600":"bg-black/30 border border-white/10"}`}>Z-Coin</button></div>{type==="CASE"?<select value={caseId} onChange={e=>setCaseId(e.target.value)} className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3">{cases.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>:<input type="number" min="1" value={z} onChange={e=>setZ(Number(e.target.value))} className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/>}<input type="number" min="1" value={activations} onChange={e=>setActivations(Number(e.target.value))} placeholder="Количество активаций" className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/><input type="datetime-local" value={expiresAt} onChange={e=>setExpiresAt(e.target.value)} required className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/><button disabled={loading} className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-4 font-black disabled:opacity-60">{loading?"Создаём...":"Создать промокод"}</button>{msg&&<p className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-sm text-violet-100">{msg}</p>}</form></div></div></main>}
+type Limits={total:number;CASE:number;ZCOIN:number;maxZ:number}|null;
+type Usage={total:number;CASE:number;ZCOIN:number};
+
+export default function PromoAdminPage(){
+  const[type,setType]=useState<"CASE"|"ZCOIN">("CASE");
+  const[code,setCode]=useState("");
+  const[cases,setCases]=useState<CaseItem[]>([]);
+  const[caseId,setCaseId]=useState("");
+  const[z,setZ]=useState(100);
+  const[activations,setActivations]=useState(10);
+  const[expiresAt,setExpiresAt]=useState("");
+  const[msg,setMsg]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[limit,setLimit]=useState<Limits>(null);
+  const[usage,setUsage]=useState<Usage>({total:0,CASE:0,ZCOIN:0});
+  const[windowHours,setWindowHours]=useState(5);
+  const[loadError,setLoadError]=useState("");
+
+  const load=async()=>{
+    setLoadError("");
+    try{
+      const r=await fetch("/api/promos",{credentials:"include",cache:"no-store"});
+      const d=await r.json().catch(()=>null);
+      if(!r.ok)throw new Error(d?.error||"Не удалось загрузить данные.");
+      setCases(d?.cases??[]);
+      setLimit(d?.limit??null);
+      setUsage(d?.usage??{total:0,CASE:0,ZCOIN:0});
+      setWindowHours(d?.windowHours??5);
+      if(d?.cases?.[0])setCaseId(current=>current||d.cases[0].id);
+    }catch(err){setLoadError(err instanceof Error?err.message:"Не удалось загрузить данные.");}
+  };
+
+  useEffect(()=>{void load();},[]);
+
+  const submit=async(e:FormEvent)=>{
+    e.preventDefault();
+    setLoading(true);setMsg("");
+    try{
+      const r=await fetch("/api/promos",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({code,type,caseId,zCoinAmount:z,maxActivations:activations,expiresAt})});
+      const d=await r.json().catch(()=>null);
+      if(!r.ok)throw new Error(d?.error||"Не удалось создать промокод.");
+      setMsg(`Промокод ${d.promo.code} создан.`);
+      setCode("");
+      await load();
+    }catch(err){setMsg(err instanceof Error?err.message:"Ошибка.");}
+    finally{setLoading(false);}
+  };
+
+  const typeLimit=limit?limit[type]:null;
+  const typeUsage=usage[type];
+
+  return <main className="min-h-screen bg-slate-950 px-4 py-8 text-white"><div className="mx-auto max-w-2xl"><div className="mb-6 flex items-center justify-between gap-3"><Link href="/admin" className="rounded-lg border border-white/15 px-3 py-2 text-sm">← Админка</Link><span className="text-sm font-black text-violet-200">Промокоды</span></div>
+    <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-5 sm:p-8"><h1 className="text-3xl font-black">Создать промокод</h1><p className="mt-2 text-sm text-slate-400">Выбери награду, количество активаций и срок действия.</p>
+      {limit?<div className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-white/10 bg-black/20 p-3"><p className="text-xs text-slate-400">За {windowHours} часов</p><p className="mt-1 font-black">{usage.total} / {limit.total}</p></div><div className="rounded-xl border border-white/10 bg-black/20 p-3"><p className="text-xs text-slate-400">Кейсы</p><p className="mt-1 font-black">{usage.CASE} / {limit.CASE}</p></div><div className="rounded-xl border border-white/10 bg-black/20 p-3"><p className="text-xs text-slate-400">Z-Coin</p><p className="mt-1 font-black">{usage.ZCOIN} / {limit.ZCOIN}</p></div></div>:<div className="mt-5 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-200">Для твоей роли создание промокодов без лимитов.</div>}
+      {loadError&&<div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200"><p>{loadError}</p><button type="button" onClick={()=>void load()} className="mt-2 rounded-lg border border-red-300/30 px-3 py-2 text-xs font-bold">Повторить</button></div>}
+      <form onSubmit={submit} className="mt-6 space-y-4"><input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={3} maxLength={40} placeholder="Код промокода" className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/>
+        <div className="grid grid-cols-2 gap-3"><button type="button" onClick={()=>setType("CASE")} className={`rounded-xl px-4 py-3 font-bold ${type==="CASE"?"bg-violet-600":"border border-white/10 bg-black/30"}`}>Кейс</button><button type="button" onClick={()=>setType("ZCOIN")} className={`rounded-xl px-4 py-3 font-bold ${type==="ZCOIN"?"bg-violet-600":"border border-white/10 bg-black/30"}`}>Z-Coin</button></div>
+        {limit&&<p className="text-xs text-slate-400">Доступно этого типа: {Math.max(0,(typeLimit??0)-typeUsage)}. {type==="ZCOIN"?`Максимум ${limit.maxZ} Z-Coin в одном промокоде.`:""}</p>}
+        {type==="CASE"?<select value={caseId} onChange={e=>setCaseId(e.target.value)} required className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3">{cases.length?<>{cases.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</>:<option value="">Нет доступных кейсов</option>}</select>:<input type="number" min="1" max={limit?.maxZ} value={z} onChange={e=>setZ(Number(e.target.value))} className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/>}
+        <input type="number" min="1" value={activations} onChange={e=>setActivations(Number(e.target.value))} placeholder="Количество активаций" className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/>
+        <input type="datetime-local" value={expiresAt} onChange={e=>setExpiresAt(e.target.value)} required className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3"/>
+        <button disabled={loading||(type==="CASE"&&!caseId)} className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-4 font-black disabled:opacity-60">{loading?"Создаём...":"Создать промокод"}</button>
+        {msg&&<p className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-3 text-sm text-violet-100">{msg}</p>}
+      </form>
+    </div></div></main>
+}
