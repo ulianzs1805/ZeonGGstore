@@ -1,4 +1,4 @@
-import { Environment, PrismaClient } from "@prisma/client";
+import { Environment, Prisma, PrismaClient } from "@prisma/client";
 
 export const SYSTEM_DROPS = [
   { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, priceMultiplier: 2 },
@@ -31,22 +31,29 @@ const LEGACY_FURIOUS_DROP_NAMES = ["AKR Necromancer", "G22 Monster", "M4 Samurai
 let syncPromise: Promise<void> | null = null;
 
 export function ensureSystemCatalog(prisma: PrismaClient) {
-  syncPromise ??= syncCatalog(prisma).catch((error) => {
+  syncPromise ??= prisma.$transaction(async (tx) => {
+    // Serialize catalog synchronization across concurrent Vercel/serverless instances.
+    // The lock is transaction-scoped and is released automatically on commit/rollback.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(91736421)`;
+    await syncCatalog(tx);
+  }).catch((error) => {
     syncPromise = null;
     throw error;
   });
   return syncPromise;
 }
 
-async function syncCatalog(prisma: PrismaClient) {
-  const cases = await prisma.case.findMany({
+type CatalogDb = PrismaClient | Prisma.TransactionClient;
+
+async function syncCatalog(db: CatalogDb) {
+  const cases = await db.case.findMany({
     where: { environment: Environment.SYSTEM, isActive: true },
     include: { drops: { orderBy: { createdAt: "asc" } } },
   });
 
   for (const currentCase of cases) {
     if (currentCase.slug === "furious") {
-      await prisma.drop.deleteMany({
+      await db.drop.deleteMany({
         where: {
           caseId: currentCase.id,
           name: { in: [...LEGACY_FURIOUS_DROP_NAMES] },
@@ -56,21 +63,20 @@ async function syncCatalog(prisma: PrismaClient) {
 
     const targetProbabilityMode = currentCase.slug === "furious" ? "MANUAL" : "DYNAMIC";
     if (currentCase.probabilityMode !== targetProbabilityMode) {
-      await prisma.case.update({
+      await db.case.update({
         where: { id: currentCase.id },
         data: { probabilityMode: targetProbabilityMode },
       });
     }
 
     const definitions = currentCase.slug === "furious" ? FURIOUS_DROPS : SYSTEM_DROPS;
-    const existingDrops = await prisma.drop.findMany({
+    const existingDrops = await db.drop.findMany({
       where: { caseId: currentCase.id },
       orderBy: { createdAt: "asc" },
     });
 
     const unmatched = existingDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name));
     const reusable = unmatched.slice(0, Math.max(0, definitions.length - existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length));
-
     const reusableById = new Set(reusable.map((drop) => drop.id));
 
     for (const definition of definitions) {
@@ -85,27 +91,21 @@ async function syncCatalog(prisma: PrismaClient) {
 
       const existingByName = existingDrops.find((drop) => drop.name === definition.name);
       if (existingByName) {
-        await prisma.drop.update({
-          where: { id: existingByName.id },
-          data,
-        });
+        await db.drop.update({ where: { id: existingByName.id }, data });
         continue;
       }
 
       const reusableDrop = reusable.find((drop) => reusableById.has(drop.id));
       if (reusableDrop) {
         reusableById.delete(reusableDrop.id);
-        await prisma.drop.update({
-          where: { id: reusableDrop.id },
-          data,
-        });
+        await db.drop.update({ where: { id: reusableDrop.id }, data });
         continue;
       }
 
-      await prisma.drop.create({ data: { ...data, caseId: currentCase.id } });
+      await db.drop.create({ data: { ...data, caseId: currentCase.id } });
     }
 
-    const finalDrops = await prisma.drop.findMany({
+    const finalDrops = await db.drop.findMany({
       where: { caseId: currentCase.id },
       orderBy: { createdAt: "asc" },
     });
@@ -114,7 +114,7 @@ async function syncCatalog(prisma: PrismaClient) {
       .map((drop) => drop.id);
 
     if (idsToDelete.length) {
-      await prisma.drop.deleteMany({
+      await db.drop.deleteMany({
         where: { caseId: currentCase.id, id: { in: idsToDelete } },
       });
     }
