@@ -26,7 +26,7 @@ export default function BonusesPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#05070d] text-white">
+    <main className="min-h-screen overflow-x-hidden bg-[#05070d] text-white">
       <Header />
 
       <section className="px-4 pb-10 pt-6 sm:px-6 lg:px-8">
@@ -62,7 +62,7 @@ export default function BonusesPage() {
                         <QuestionIcon />
                       </button>
                       {promoInfoOpen && (
-                        <div className="absolute left-0 top-10 z-30 w-[min(82vw,330px)] rounded-xl border border-violet-300/20 bg-[#111827] p-3 text-left text-xs leading-5 text-slate-300 shadow-[0_18px_45px_rgba(0,0,0,0.45)]">
+                        <div className="absolute left-0 top-10 z-30 w-[calc(100vw-2rem)] max-w-[330px] rounded-xl border border-violet-300/20 bg-[#111827] p-3 text-left text-xs leading-5 text-slate-300 shadow-[0_18px_45px_rgba(0,0,0,0.45)] sm:w-[330px]">
                           <p><span className="font-black text-white">Для чего:</span> активируй промокод, чтобы получить бонус на аккаунт.</p>
                           <p className="mt-2"><span className="font-black text-white">Что можно получить:</span> Z, бесплатный кейс или другой подарок.</p>
                           <p className="mt-2"><span className="font-black text-white">Где брать:</span> новые промокоды публикуются в официальных анонсах и сообщениях проекта.</p>
