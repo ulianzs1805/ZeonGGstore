@@ -14,8 +14,15 @@ function validName(value: unknown): value is string {
 }
 function normalizeCaseName(value: string) { return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("ru-RU"); }
 function processedImage(value: string) {
-  if (typeof value !== "string" || value.length < 12 || value.length > 240) return false;
-  return /^\/uploads\/[a-z0-9-]+\/[a-f0-9-]+\.(?:png|jpg|jpeg|webp)$/i.test(value);
+  if (typeof value !== "string" || value.length < 12 || value.length > 1000) return false;
+  const legacyUpload = /^\/uploads\/[a-z0-9-]+\/[a-f0-9-]+\.(?:png|jpg|jpeg|webp)$/i.test(value);
+  if (legacyUpload) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && /vercel-storage\.com$/i.test(url.hostname) && /^\/cases\/[a-z0-9-]+\/[a-f0-9-]+\.(?:png|jpg|jpeg|webp)$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
 }
 function makeSlug(value: string) { return value.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `case-${Date.now()}`; }
 
@@ -24,7 +31,7 @@ export async function GET() {
   if (!access.user) return access.response;
   await ensureSystemCatalog(prisma);
   const cases = await prisma.case.findMany({ where: access.user.role === "ADMIN" ? { createdById: access.user.id } : undefined, include: { drops: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } });
-  return NextResponse.json({ cases: cases.map((item) => ({ ...item, drops: withFinalProbabilities(item.drops, item.probabilityMode) })) });
+  return NextResponse.json({ cases: cases.map((item) => ({ ...item, isCollectionLocked: item.environment === Environment.SYSTEM, drops: withFinalProbabilities(item.drops, item.probabilityMode) })) });
 }
 
 export async function POST(request: Request) {
@@ -58,8 +65,8 @@ export async function POST(request: Request) {
     const devProfile = await prisma.devProfile.findUnique({ where: { userId: access.user.id }, select: { devId: true } });
     const actorAdminId = adminProfile?.adminId ?? devProfile?.devId ?? null;
     const created = await prisma.$transaction(async (transaction) => {
-      const createdCase = await transaction.case.create({ data: { slug, name, description, image: image || "/cases/default-case.png", price, probabilityMode, createdById: access.user.id, drops: { create: normalizedDrops.map((drop, index) => ({ name: drop.name, rarity: drop.rarity, image: drop.image, price: drop.price, probability: chances[index] })) } }, include: { drops: true } });
-      await transaction.auditLog.create({ data: { actorUserId: access.user.id, actorRole: access.user.role, actorAdminId, action: "CASE_CREATED", targetType: "CASE", targetId: createdCase.id, metadata: JSON.stringify({ name, drops: createdCase.drops.length }), status: "SUCCESS" } });
+      const createdCase = await transaction.case.create({ data: { slug, name, description, image, price, probabilityMode, createdById: access.user.id, drops: { create: normalizedDrops.map((drop, index) => ({ name: drop.name, rarity: drop.rarity, image: drop.image, price: drop.price, probability: chances[index] })) } }, include: { drops: true } });
+      await transaction.auditLog.create({ data: { actorUserId: access.user.id, actorRole: access.user.role, actorAdminId, action: "CASE_CREATED", targetType: "CASE", targetId: createdCase.id, metadata: JSON.stringify({ name, drops: createdCase.drops.length, collectionLocked: false }), status: "SUCCESS" } });
       return createdCase;
     });
     return NextResponse.json({ case: created }, { status: 201 });
@@ -83,6 +90,7 @@ export async function PATCH(request: Request) {
   if (probabilityMode !== null) {
     const editAccess = await requirePermission("CASE_EDIT");
     if (!editAccess.user) return editAccess.response;
+    if (target.environment === Environment.SYSTEM) return NextResponse.json({ error: "Этот кейс является полноценной системной коллекцией. Его состав и режим вероятностей закреплены." }, { status: 403 });
     const updated = await prisma.$transaction(async (tx) => { const result = await tx.case.update({ where: { id: caseId }, data: { probabilityMode } }); await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: null, action: "CASE_PROBABILITY_MODE_UPDATED", targetType: "CASE", targetId: caseId, metadata: JSON.stringify({ oldMode: target.probabilityMode, newMode: probabilityMode }), status: "SUCCESS" } }); return result; });
     return NextResponse.json({ case: updated });
   }
