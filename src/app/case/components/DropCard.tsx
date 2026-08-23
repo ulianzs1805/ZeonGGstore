@@ -1,13 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getRarityCardClass } from "@/lib/rarity-styles";
 import type { CaseItem } from "../lib/types";
 
 export default function DropCard({ item, winner = false }: { item: CaseItem; winner?: boolean }) {
+  const imageSrc = useMemo(() => (typeof item.image === "string" ? item.image.trim() : ""), [item.image]);
   const [imageError, setImageError] = useState(false);
-  const imageSrc = typeof item.image === "string" ? item.image.trim() : "";
+
+  useEffect(() => {
+    setImageError(false);
+  }, [imageSrc]);
 
   return (
     <div
@@ -18,7 +22,7 @@ export default function DropCard({ item, winner = false }: { item: CaseItem; win
       ].join(" ")}
     >
       {winner && <div className="pointer-events-none absolute inset-0 rounded-[22px] bg-yellow-300/10 blur-xl" />}
-      <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[18px]">
+      <div className="relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-[18px]">
         {imageSrc && !imageError ? (
           <Image
             src={imageSrc}
@@ -27,8 +31,8 @@ export default function DropCard({ item, winner = false }: { item: CaseItem; win
             className="object-contain"
             sizes="112px"
             unoptimized
-            loading="lazy"
-            priority={winner}
+            loading="eager"
+            priority
             draggable={false}
             onError={() => setImageError(true)}
           />
