@@ -8,9 +8,10 @@ import { calculateFinalProbabilities, withFinalProbabilities } from "@/lib/price
 
 type DropInput = { name?: unknown; rarity?: unknown; image?: unknown; price?: unknown; chance?: unknown; probability?: unknown };
 const DEFAULT_ADMIN_CASE_PRICE = 199;
+const RESERVED_CATALOG_CASE_NAMES = new Set(["furious", "fable", "empire", "chameleon"]);
 
 function validName(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length >= 3 && value.trim().length <= 80 && /^[\p{L}\p{N} ._'"-]+$/u.test(value.trim());
+  return typeof value === "string" && value.trim().length >= 3 && value.trim().length <= 80 && /^[\p{L}\p{N} ._'\"-]+$/u.test(value.trim());
 }
 function normalizeCaseName(value: string) { return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("ru-RU"); }
 function processedImage(value: string) {
@@ -46,11 +47,13 @@ export async function POST(request: Request) {
   const requestedPrice = typeof body?.price === "number" ? body.price : NaN;
   const drops = Array.isArray(body?.drops) ? body.drops as DropInput[] : [];
   const requestedProbabilityMode = body?.probabilityMode === "DYNAMIC" ? "DYNAMIC" : "MANUAL";
-  // Ordinary admins are intentionally locked to automatic probabilities.
-  // DEV/NPN1_DEV keep the ability to choose the mode for each case.
   const probabilityMode = access.user.role === "ADMIN" ? "DYNAMIC" : requestedProbabilityMode;
 
   if (!validName(name)) return NextResponse.json({ error: "Название кейса должно содержать от 3 до 80 символов." }, { status: 400 });
+  const normalizedName = normalizeCaseName(name);
+  if (RESERVED_CATALOG_CASE_NAMES.has(normalizedName)) {
+    return NextResponse.json({ error: `Название «${name}» уже используется полноценным кейсом из каталога и зарезервировано.` }, { status: 409 });
+  }
   if (!processedImage(image)) return NextResponse.json({ error: "Сначала загрузите изображение кейса через форму." }, { status: 400 });
 
   const price = access.user.role === "ADMIN" ? DEFAULT_ADMIN_CASE_PRICE : requestedPrice;
@@ -58,7 +61,6 @@ export async function POST(request: Request) {
   if (drops.length < 1) return NextResponse.json({ error: "Добавьте хотя бы один предмет в кейс." }, { status: 400 });
 
   const slug = makeSlug(name);
-  const normalizedName = normalizeCaseName(name);
   const existingCases = await prisma.case.findMany({ select: { name: true, slug: true, environment: true } });
   const existing = existingCases.find((item) => normalizeCaseName(item.name) === normalizedName || item.slug === slug);
   if (existing) return NextResponse.json({ error: `Название «${name}» уже занято существующим кейсом и не может использоваться повторно.` }, { status: 409 });
@@ -81,56 +83,18 @@ export async function POST(request: Request) {
   const chances = probabilityMode === "DYNAMIC" ? automaticChances : manualChances;
 
   if (!validateChances(chances)) {
-    return NextResponse.json({
-      error: probabilityMode === "DYNAMIC"
-        ? "Не удалось автоматически рассчитать вероятности. Проверьте цену и редкость каждого скина."
-        : "Невозможно сохранить кейс. В ручном режиме сумма вероятностей должна быть равна 100%.",
-    }, { status: 400 });
+    return NextResponse.json({ error: probabilityMode === "DYNAMIC" ? "Не удалось автоматически рассчитать вероятности. Проверьте цену и редкость каждого скина." : "Невозможно сохранить кейс. В ручном режиме сумма вероятностей должна быть равна 100%." }, { status: 400 });
   }
 
   try {
     const adminProfile = await prisma.adminProfile.findUnique({ where: { userId: access.user.id }, select: { adminId: true } });
     const devProfile = await prisma.devProfile.findUnique({ where: { userId: access.user.id }, select: { devId: true } });
     const actorAdminId = adminProfile?.adminId ?? devProfile?.devId ?? null;
-
     const created = await prisma.$transaction(async (transaction) => {
-      const createdCase = await transaction.case.create({
-        data: {
-          slug,
-          name,
-          description,
-          image,
-          price,
-          probabilityMode,
-          createdById: access.user.id,
-          drops: {
-            create: normalizedDrops.map((drop, index) => ({
-              name: drop.name,
-              rarity: drop.rarity,
-              image: drop.image,
-              price: drop.price,
-              probability: probabilityMode === "DYNAMIC" ? 1 : chances[index],
-            })),
-          },
-        },
-        include: { drops: true },
-      });
-
-      await transaction.auditLog.create({
-        data: {
-          actorUserId: access.user.id,
-          actorRole: access.user.role,
-          actorAdminId,
-          action: "CASE_CREATED",
-          targetType: "CASE",
-          targetId: createdCase.id,
-          metadata: JSON.stringify({ name, drops: createdCase.drops.length, collectionLocked: false, probabilityMode }),
-          status: "SUCCESS",
-        },
-      });
+      const createdCase = await transaction.case.create({ data: { slug, name, description, image, price, probabilityMode, createdById: access.user.id, drops: { create: normalizedDrops.map((drop, index) => ({ name: drop.name, rarity: drop.rarity, image: drop.image, price: drop.price, probability: probabilityMode === "DYNAMIC" ? 1 : chances[index] })) } }, include: { drops: true } });
+      await transaction.auditLog.create({ data: { actorUserId: access.user.id, actorRole: access.user.role, actorAdminId, action: "CASE_CREATED", targetType: "CASE", targetId: createdCase.id, metadata: JSON.stringify({ name, drops: createdCase.drops.length, collectionLocked: false, probabilityMode }), status: "SUCCESS" } });
       return createdCase;
     });
-
     return NextResponse.json({ case: { ...created, drops: withFinalProbabilities(created.drops, probabilityMode) } }, { status: 201 });
   } catch (error) {
     await writeAuditLog({ actorUserId: access.user.id, actorRole: access.user.role, action: "CASE_CREATED", targetType: "CASE", metadata: { error: String(error) }, status: "FAILED" });
@@ -146,33 +110,17 @@ export async function PATCH(request: Request) {
   const isActive = typeof body?.isActive === "boolean" ? body.isActive : null;
   const probabilityMode = body?.probabilityMode === "DYNAMIC" || body?.probabilityMode === "MANUAL" ? body.probabilityMode : null;
   if (!caseId || (isActive === null && probabilityMode === null)) return NextResponse.json({ error: "Укажите caseId и изменение." }, { status: 400 });
-
   const target = await prisma.case.findUnique({ where: { id: caseId } });
   if (!target) return NextResponse.json({ error: "Кейс не найден." }, { status: 404 });
   if (access.user.role === "ADMIN" && target.createdById !== access.user.id) return NextResponse.json({ error: "ADMIN может менять статус только своих кейсов." }, { status: 403 });
-
   if (probabilityMode !== null) {
     const editAccess = await requirePermission("CASE_EDIT");
     if (!editAccess.user) return editAccess.response;
-    if (access.user.role === "ADMIN" && probabilityMode !== "DYNAMIC") {
-      return NextResponse.json({ error: "ADMIN использует только автоматический режим вероятностей." }, { status: 403 });
-    }
+    if (access.user.role === "ADMIN" && probabilityMode !== "DYNAMIC") return NextResponse.json({ error: "ADMIN использует только автоматический режим вероятностей." }, { status: 403 });
     if (target.environment === Environment.SYSTEM) return NextResponse.json({ error: "Этот кейс является полноценной системной коллекцией. Его состав и режим вероятностей закреплены." }, { status: 403 });
-    const updated = await prisma.$transaction(async (tx) => {
-      const result = await tx.case.update({ where: { id: caseId }, data: { probabilityMode } });
-      await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: null, action: "CASE_PROBABILITY_MODE_UPDATED", targetType: "CASE", targetId: caseId, metadata: JSON.stringify({ oldMode: target.probabilityMode, newMode: probabilityMode }), status: "SUCCESS" } });
-      return result;
-    });
+    const updated = await prisma.$transaction(async (tx) => { const result = await tx.case.update({ where: { id: caseId }, data: { probabilityMode } }); await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: null, action: "CASE_PROBABILITY_MODE_UPDATED", targetType: "CASE", targetId: caseId, metadata: JSON.stringify({ oldMode: target.probabilityMode, newMode: probabilityMode }), status: "SUCCESS" } }); return result; });
     return NextResponse.json({ case: updated });
   }
-
-  const updated = await prisma.$transaction(async (tx) => {
-    const result = await tx.case.update({ where: { id: caseId }, data: { isActive } });
-    const adminProfile = access.user!.role === "ADMIN" ? await tx.adminProfile.findUnique({ where: { userId: access.user!.id }, select: { adminId: true } }) : null;
-    const devProfile = access.user!.role !== "ADMIN" ? await tx.devProfile.findUnique({ where: { userId: access.user!.id }, select: { devId: true } }) : null;
-    await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: adminProfile?.adminId ?? devProfile?.devId ?? null, action: isActive ? "CASE_ACTIVATED" : "CASE_DEACTIVATED", targetType: "CASE", targetId: caseId, metadata: JSON.stringify({ oldValue: target.isActive, newValue: isActive }), status: "SUCCESS" } });
-    return result;
-  });
-
+  const updated = await prisma.$transaction(async (tx) => { const result = await tx.case.update({ where: { id: caseId }, data: { isActive } }); const adminProfile = access.user!.role === "ADMIN" ? await tx.adminProfile.findUnique({ where: { userId: access.user!.id }, select: { adminId: true } }) : null; const devProfile = access.user!.role !== "ADMIN" ? await tx.devProfile.findUnique({ where: { userId: access.user!.id }, select: { devId: true } }) : null; await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: adminProfile?.adminId ?? devProfile?.devId ?? null, action: isActive ? "CASE_ACTIVATED" : "CASE_DEACTIVATED", targetType: "CASE", targetId: caseId, metadata: JSON.stringify({ oldValue: target.isActive, newValue: isActive }), status: "SUCCESS" } }); return result; });
   return NextResponse.json({ case: updated });
 }
