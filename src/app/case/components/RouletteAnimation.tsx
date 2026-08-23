@@ -71,40 +71,58 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     const index = request.winnerIndex;
     if (index < 0 || index >= slots.length) return;
 
-    requestIdRef.current = request.id;
-    finishedAnimationRef.current = null;
-    clearAnimationListeners();
-    wheel.style.transition = "none";
-    wheel.style.transform = "translate3d(0,0,0)";
-    void wheel.offsetWidth;
-    activeAnimationRef.current = request.id;
+    let cancelled = false;
+    const imageUrls = Array.from(new Set(slots.map((item) => item.image).filter((src): src is string => typeof src === "string" && src.trim().length > 0)));
 
-    const target = Math.max(0, index * CARD_STEP + CARD_WIDTH / 2 - viewport.clientWidth / 2);
-    let finished = false;
-    const finish = () => {
-      if (finished || activeAnimationRef.current !== request.id) return;
-      finished = true;
-      if (finishedAnimationRef.current === request.id) return;
-      finishedAnimationRef.current = request.id;
-      activeAnimationRef.current = null;
+    const preload = async () => {
+      await Promise.allSettled(
+        imageUrls.map((src) => new Promise<void>((resolve) => {
+          const image = new window.Image();
+          image.onload = () => resolve();
+          image.onerror = () => resolve();
+          image.src = src.trim();
+        })),
+      );
+      if (cancelled) return;
+
+      requestIdRef.current = request.id;
+      finishedAnimationRef.current = null;
       clearAnimationListeners();
-      onAnimatingChange(false);
-      finishRef.current();
+      wheel.style.transition = "none";
+      wheel.style.transform = "translate3d(0,0,0)";
+      void wheel.offsetWidth;
+      activeAnimationRef.current = request.id;
+
+      const target = Math.max(0, index * CARD_STEP + CARD_WIDTH / 2 - viewport.clientWidth / 2);
+      let finished = false;
+      const finish = () => {
+        if (finished || activeAnimationRef.current !== request.id) return;
+        finished = true;
+        if (finishedAnimationRef.current === request.id) return;
+        finishedAnimationRef.current = request.id;
+        activeAnimationRef.current = null;
+        clearAnimationListeners();
+        onAnimatingChange(false);
+        finishRef.current();
+      };
+      const handler = (event: TransitionEvent) => {
+        if (event.target !== wheel || event.propertyName !== "transform") return;
+        finish();
+      };
+      handlerRef.current = handler;
+      wheel.addEventListener("transitionend", handler);
+      onAnimatingChange(true);
+      requestAnimationFrame(() => {
+        if (activeAnimationRef.current !== request.id || finished) return;
+        wheel.style.transition = "transform 4300ms cubic-bezier(0.12, 0.78, 0.16, 1)";
+        wheel.style.transform = `translate3d(-${target}px,0,0)`;
+        fallbackRef.current = window.setTimeout(finish, 4800);
+      });
     };
-    const handler = (event: TransitionEvent) => {
-      if (event.target !== wheel || event.propertyName !== "transform") return;
-      finish();
-    };
-    handlerRef.current = handler;
-    wheel.addEventListener("transitionend", handler);
-    onAnimatingChange(true);
-    requestAnimationFrame(() => {
-      if (activeAnimationRef.current !== request.id || finished) return;
-      wheel.style.transition = "transform 4300ms cubic-bezier(0.12, 0.78, 0.16, 1)";
-      wheel.style.transform = `translate3d(-${target}px,0,0)`;
-      fallbackRef.current = window.setTimeout(finish, 4800);
-    });
-  }, [request, slots.length, clearAnimationListeners, onAnimatingChange]);
+
+    void preload();
+    return () => { cancelled = true; };
+  }, [request, slots, clearAnimationListeners, onAnimatingChange]);
 
   useEffect(() => () => { clearAnimationListeners(); activeAnimationRef.current = null; }, [clearAnimationListeners]);
 
