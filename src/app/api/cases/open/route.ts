@@ -31,7 +31,13 @@ export async function POST(request: Request) {
       const assignment=await tx.forceDropAssignment.findFirst({where:{targetUserId:user.id,caseId:selectedCase.id,status:"PENDING"},orderBy:{createdAt:"asc"}});
       const assignedDrop=assignment?selectedCase.drops.find(d=>d.id===assignment.dropId):null; if(assignment&&!assignedDrop)throw new Error("INVALID_FORCE_DROP_ASSIGNMENT"); const drop=assignedDrop??pickDrop(selectedCase.drops);
       let balance=currentUser.balance;
-      if(grant){await tx.freeCaseGrant.update({where:{id:grant.id},data:{consumedAt:new Date()}});}else{const updated=await tx.user.update({where:{id:user.id},data:{balance:{decrement:selectedCase.price}}});balance=updated.balance;}
+      if(grant){
+        const claimed=await tx.freeCaseGrant.updateMany({where:{id:grant.id,userId:user.id,caseId:selectedCase.id,consumedAt:null},data:{consumedAt:new Date()}});
+        if(claimed.count!==1)throw new Error("FREE_GRANT_RACE");
+      }else{
+        const updated=await tx.user.update({where:{id:user.id},data:{balance:{decrement:selectedCase.price}}});
+        balance=updated.balance;
+      }
       const item=await tx.inventoryItem.create({data:{userId:user.id,itemId:drop.id,caseId:selectedCase.id,name:drop.name,rarity:drop.rarity,image:drop.image,price:drop.price}});
       await tx.operation.create({data:{userId:user.id,type:grant?"CASE_OPEN_PROMO":"CASE_OPEN",label:selectedCase.name,itemId:item.id,amount:grant?0:-selectedCase.price,status:"SUCCESS",idempotencyKey}});
       await tx.transaction.create({data:{userId:user.id,type:grant?"CASE_OPEN_PROMO":"CASE_OPEN",zCoinAmount:grant?0:-selectedCase.price,status:"SUCCESS"}});
@@ -43,6 +49,7 @@ export async function POST(request: Request) {
     const message=error instanceof Error?error.message:"";
     if(message==="INSUFFICIENT_BALANCE")return NextResponse.json({error:"Недостаточно Z-Coin для открытия этого кейса."},{status:400});
     if(message==="IDEMPOTENCY_CONFLICT")return NextResponse.json({error:"Ключ запроса уже использован для другой операции."},{status:409});
+    if(message==="FREE_GRANT_RACE")return NextResponse.json({error:"Бесплатное открытие уже используется. Повтори попытку."},{status:409});
     if(message==="USER_NOT_FOUND")return NextResponse.json({error:"Пользователь не найден"},{status:401});
     if(message==="INVALID_FORCE_DROP_ASSIGNMENT")return NextResponse.json({error:"Ожидающий Force Drop больше не принадлежит этому кейсу."},{status:409});
     console.error("POST /api/cases/open failed",error);return NextResponse.json({error:"Не удалось открыть кейс",message:message||"Unknown server error"},{status:500});
