@@ -62,7 +62,7 @@ export default function BonusesPage() {
                         <QuestionIcon />
                       </button>
                       {promoInfoOpen && (
-                        <div className="absolute left-0 top-10 z-30 w-[calc(100vw-2rem)] max-w-[330px] rounded-xl border border-violet-300/20 bg-[#111827] p-3 text-left text-xs leading-5 text-slate-300 shadow-[0_18px_45px_rgba(0,0,0,0.45)] sm:w-[330px]">
+                        <div className="absolute bottom-10 left-1/2 z-30 w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-violet-300/20 bg-[#111827] p-3 text-left text-xs leading-5 text-slate-300 shadow-[0_18px_45px_rgba(0,0,0,0.45)] before:absolute before:bottom-[-6px] before:left-1/2 before:h-3 before:w-3 before:-translate-x-1/2 before:rotate-45 before:border-b before:border-r before:border-violet-300/20 before:bg-[#111827] sm:bottom-auto sm:left-0 sm:top-10 sm:w-[330px] sm:translate-x-0 sm:before:bottom-auto sm:before:left-4 sm:before:top-[-6px] sm:before:border-b-0 sm:before:border-r-0 sm:before:border-l sm:before:border-t">
                           <p><span className="font-black text-white">Для чего:</span> активируй промокод, чтобы получить бонус на аккаунт.</p>
                           <p className="mt-2"><span className="font-black text-white">Что можно получить:</span> Z, бесплатный кейс или другой подарок.</p>
                           <p className="mt-2"><span className="font-black text-white">Где брать:</span> новые промокоды публикуются в официальных анонсах и сообщениях проекта.</p>
