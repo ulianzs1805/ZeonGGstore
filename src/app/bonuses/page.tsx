@@ -17,6 +17,7 @@ function QuestionIcon() {
 export default function BonusesPage() {
   const [promo, setPromo] = useState("");
   const [notice, setNotice] = useState("");
+  const [promoInfoOpen, setPromoInfoOpen] = useState(false);
 
   const submitPromo = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -50,13 +51,23 @@ export default function BonusesPage() {
                 <form onSubmit={submitPromo}>
                   <div className="mb-3 flex items-center gap-2">
                     <label htmlFor="promo" className="text-lg font-black text-white">Введи промокод</label>
-                    <div className="group relative">
-                      <button type="button" className="flex h-6 w-6 items-center justify-center rounded-full border border-violet-400/40 bg-violet-500/10 text-violet-200 transition hover:bg-violet-500/20" aria-label="Что такое промокоды">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setPromoInfoOpen((open) => !open)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-violet-400/40 bg-violet-500/10 text-violet-200 transition hover:bg-violet-500/20 active:scale-95"
+                        aria-label="Что такое промокоды"
+                        aria-expanded={promoInfoOpen}
+                      >
                         <QuestionIcon />
                       </button>
-                      <div className="pointer-events-none absolute bottom-9 left-0 z-20 w-[min(82vw,330px)] translate-y-1 rounded-xl border border-violet-300/20 bg-[#111827] p-3 text-left text-xs leading-5 text-slate-300 opacity-0 shadow-[0_18px_45px_rgba(0,0,0,0.45)] transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                        Промокод — это код на бонус. Он может дать Z, бесплатный кейс или другой подарок. Новые промокоды публикуются в официальных анонсах и сообщениях проекта.
-                      </div>
+                      {promoInfoOpen && (
+                        <div className="absolute left-0 top-10 z-30 w-[min(82vw,330px)] rounded-xl border border-violet-300/20 bg-[#111827] p-3 text-left text-xs leading-5 text-slate-300 shadow-[0_18px_45px_rgba(0,0,0,0.45)]">
+                          <p><span className="font-black text-white">Для чего:</span> активируй промокод, чтобы получить бонус на аккаунт.</p>
+                          <p className="mt-2"><span className="font-black text-white">Что можно получить:</span> Z, бесплатный кейс или другой подарок.</p>
+                          <p className="mt-2"><span className="font-black text-white">Где брать:</span> новые промокоды публикуются в официальных анонсах и сообщениях проекта.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
