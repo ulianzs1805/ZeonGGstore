@@ -18,11 +18,16 @@ export async function POST(request: Request) {
       if (!item) throw new Error("ITEM_NOT_AVAILABLE");
 
       const soldAt = new Date();
+      const claimed = await transaction.inventoryItem.updateMany({
+        where: { id: item.id, userId: user.id, soldAt: null },
+        data: { soldAt },
+      });
+      if (claimed.count !== 1) throw new Error("ITEM_NOT_AVAILABLE");
+
       const updatedUser = await transaction.user.update({
         where: { id: user.id },
         data: { balance: { increment: item.price } },
       });
-      await transaction.inventoryItem.update({ where: { id: item.id }, data: { soldAt } });
       const operation = await transaction.operation.create({
         data: { userId: user.id, type: "ITEM_SALE", itemId: item.id, amount: item.price, status: "SUCCESS", createdAt: soldAt },
       });
