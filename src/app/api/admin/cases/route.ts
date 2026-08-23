@@ -45,7 +45,10 @@ export async function POST(request: Request) {
   const image = typeof body?.image === "string" ? body.image.trim() : "";
   const requestedPrice = typeof body?.price === "number" ? body.price : NaN;
   const drops = Array.isArray(body?.drops) ? body.drops as DropInput[] : [];
-  const probabilityMode = body?.probabilityMode === "DYNAMIC" ? "DYNAMIC" : "MANUAL";
+  const requestedProbabilityMode = body?.probabilityMode === "DYNAMIC" ? "DYNAMIC" : "MANUAL";
+  // Ordinary admins are intentionally locked to automatic probabilities.
+  // DEV/NPN1_DEV keep the ability to choose the mode for each case.
+  const probabilityMode = access.user.role === "ADMIN" ? "DYNAMIC" : requestedProbabilityMode;
 
   if (!validName(name)) return NextResponse.json({ error: "Название кейса должно содержать от 3 до 80 символов." }, { status: 400 });
   if (!processedImage(image)) return NextResponse.json({ error: "Сначала загрузите изображение кейса через форму." }, { status: 400 });
@@ -151,6 +154,9 @@ export async function PATCH(request: Request) {
   if (probabilityMode !== null) {
     const editAccess = await requirePermission("CASE_EDIT");
     if (!editAccess.user) return editAccess.response;
+    if (access.user.role === "ADMIN" && probabilityMode !== "DYNAMIC") {
+      return NextResponse.json({ error: "ADMIN использует только автоматический режим вероятностей." }, { status: 403 });
+    }
     if (target.environment === Environment.SYSTEM) return NextResponse.json({ error: "Этот кейс является полноценной системной коллекцией. Его состав и режим вероятностей закреплены." }, { status: 403 });
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.case.update({ where: { id: caseId }, data: { probabilityMode } });
