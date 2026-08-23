@@ -79,6 +79,6 @@ export default function AccountSection({ section }: { section: Section }) {
     {section === "transactions" && <TransactionsSection transactions={data.transactions} />}
     {section === "statistics" && <StatisticsSection statistics={statistics} bestDrop={bestDrop} />}
     {section === "settings" && <SettingsSection user={data.user} onResetBeta={() => void resetBetaAccess()} />}
-    {section === "support" && <SupportTicketPanel tickets={data.tickets} onRefresh={load} />}
+    {section === "support" && <SupportTicketPanel tickets={data.tickets} onRefresh={() => void load()} />}
   </AccountShell>;
 }
