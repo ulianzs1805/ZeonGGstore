@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requirePermission, writeAuditLog } from "@/lib/rbac";
-import { validateChances, validateDropPrice } from "@/lib/economy-guard";
+import { validateCasePrice, validateChances, validateDropPrice } from "@/lib/economy-guard";
 
 function validName(value: unknown): value is string {
   return typeof value === "string" && value.trim().length >= 3 && value.trim().length <= 80 && /^[\p{L}\p{N} ._'"-]+$/u.test(value.trim());
@@ -16,7 +15,6 @@ type TesterDropInput = { name?: unknown; rarity?: unknown; image?: unknown; pric
 export async function GET() {
   const access = await requirePermission("TESTER_CATALOG_MANAGE");
   if (!access.user) return access.response;
-
   const cases = await prisma.case.findMany({ where: { environment: "TEST" }, include: { drops: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } });
   return NextResponse.json({ cases });
 }
@@ -28,23 +26,23 @@ export async function POST(request: Request) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const description = typeof body?.description === "string" ? body.description.trim() : null;
   const image = typeof body?.image === "string" ? body.image.trim() : "";
-  const price = typeof body?.price === "number" ? body.price : 0;
+  const price = typeof body?.price === "number" ? body.price : NaN;
   const drops = Array.isArray(body?.drops) ? body.drops as TesterDropInput[] : [];
   const probabilityMode = body?.probabilityMode === "DYNAMIC" ? "DYNAMIC" : "MANUAL";
 
   if (!validName(name)) return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+  if (!validateCasePrice(price)) return NextResponse.json({ error: "Case price is invalid" }, { status: 400 });
   const slug = makeSlug(name);
   const existing = await prisma.case.findFirst({ where: { OR: [{ name }, { slug }] } });
   if (existing) return NextResponse.json({ error: "Case name/slug exists" }, { status: 409 });
 
-  // Normalize drops minimally
-  const normalized = drops.map(d => ({ name: typeof d.name === "string" ? d.name.trim() : "", rarity: typeof d.rarity === "string" ? d.rarity.trim() : "", image: typeof d.image === "string" ? d.image.trim() : "", price: typeof d.price === "number" ? d.price : 0, probability: typeof d.probability === "number" ? d.probability : 0 }));
+  const normalized = drops.map(d => ({ name: typeof d.name === "string" ? d.name.trim() : "", rarity: typeof d.rarity === "string" ? d.rarity.trim() : "", image: typeof d.image === "string" ? d.image.trim() : "", price: typeof d.price === "number" ? d.price : NaN, probability: typeof d.probability === "number" ? d.probability : NaN }));
   if (normalized.length === 0) return NextResponse.json({ error: "Add at least one drop" }, { status: 400 });
-  if (normalized.some((drop) => !validateDropPrice(drop.price)) || !validateChances(normalized.map((drop) => drop.probability))) return NextResponse.json({ error: "Prices must be positive and probabilities must total 100" }, { status: 400 });
+  if (normalized.some((drop) => !drop.name || !validateDropPrice(drop.price)) || !validateChances(normalized.map((drop) => drop.probability))) return NextResponse.json({ error: "Prices must be positive and probabilities must total 100" }, { status: 400 });
 
   try {
     const created = await prisma.$transaction(async (tx) => {
-      const c = await tx.case.create({ data: { slug, name, description, image: image || "/cases/default-case.png", price, probabilityMode, createdById: access.user!.id, environment: "TEST", drops: { create: normalized.map(d => ({ name: d.name, rarity: d.rarity, image: d.image, price: d.price, probability: d.probability, environment: "TEST" })) } }, include: { drops: true } });
+      const c = await tx.case.create({ data: { slug, name, description, image: image || "/cases/default-case.png", price, probabilityMode, createdById: access.user!.id, environment: "TEST", drops: { create: normalized.map(d => ({ name: d.name, rarity: "", image: d.image, price: d.price, probability: d.probability, environment: "TEST" })) } }, include: { drops: true } });
       await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: null, action: "TEST_CASE_CREATED", targetType: "CASE", targetId: c.id, metadata: JSON.stringify({ drops: c.drops.length }), status: "SUCCESS" } });
       return c;
     });
