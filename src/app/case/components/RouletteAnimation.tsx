@@ -14,7 +14,7 @@ type Props = {
   request: RouletteAnimationRequest | null;
   resetToken: number;
   onAnimatingChange: (value: boolean) => void;
-  onFinished: () => void;
+  onFinished: (requestId: string) => void;
 };
 
 const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function RouletteAnimation(
@@ -28,6 +28,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
   const requestIdRef = useRef<string | null>(null);
   const activeAnimationRef = useRef<string | null>(null);
   const finishedAnimationRef = useRef<string | null>(null);
+  const generationRef = useRef(0);
   const finishRef = useRef(onFinished);
   const resetRef = useRef(resetToken);
 
@@ -44,10 +45,13 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
   }, []);
 
   const reset = useCallback(() => {
-    const wheel = trackRef.current;
-    clearAnimationListeners();
+    generationRef.current += 1;
+    requestIdRef.current = null;
+    finishedAnimationRef.current = null;
     activeAnimationRef.current = null;
+    clearAnimationListeners();
     onAnimatingChange(false);
+    const wheel = trackRef.current;
     if (!wheel) return;
     wheel.style.transition = "none";
     wheel.style.transform = "translate3d(0,0,0)";
@@ -59,8 +63,6 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     if (resetRef.current === resetToken) return;
     resetRef.current = resetToken;
     reset();
-    requestIdRef.current = null;
-    finishedAnimationRef.current = null;
   }, [resetToken, reset]);
 
   useEffect(() => {
@@ -71,6 +73,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     const index = request.winnerIndex;
     if (index < 0 || index >= slots.length) return;
 
+    const generation = generationRef.current;
     let cancelled = false;
     const imageUrls = Array.from(new Set(slots.map((item) => item.image).filter((src): src is string => typeof src === "string" && src.trim().length > 0)));
 
@@ -83,7 +86,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
           image.src = src.trim();
         })),
       );
-      if (cancelled) return;
+      if (cancelled || generationRef.current !== generation) return;
 
       requestIdRef.current = request.id;
       finishedAnimationRef.current = null;
@@ -96,14 +99,14 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
       const target = Math.max(0, index * CARD_STEP + CARD_WIDTH / 2 - viewport.clientWidth / 2);
       let finished = false;
       const finish = () => {
-        if (finished || activeAnimationRef.current !== request.id) return;
+        if (finished || cancelled || generationRef.current !== generation || activeAnimationRef.current !== request.id) return;
         finished = true;
         if (finishedAnimationRef.current === request.id) return;
         finishedAnimationRef.current = request.id;
         activeAnimationRef.current = null;
         clearAnimationListeners();
         onAnimatingChange(false);
-        finishRef.current();
+        finishRef.current(request.id);
       };
       const handler = (event: TransitionEvent) => {
         if (event.target !== wheel || event.propertyName !== "transform") return;
@@ -113,7 +116,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
       wheel.addEventListener("transitionend", handler);
       onAnimatingChange(true);
       requestAnimationFrame(() => {
-        if (activeAnimationRef.current !== request.id || finished) return;
+        if (cancelled || generationRef.current !== generation || activeAnimationRef.current !== request.id || finished) return;
         wheel.style.transition = "transform 4300ms cubic-bezier(0.12, 0.78, 0.16, 1)";
         wheel.style.transform = `translate3d(-${target}px,0,0)`;
         fallbackRef.current = window.setTimeout(finish, 4800);
@@ -124,7 +127,7 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
     return () => { cancelled = true; };
   }, [request, slots, clearAnimationListeners, onAnimatingChange]);
 
-  useEffect(() => () => { clearAnimationListeners(); activeAnimationRef.current = null; }, [clearAnimationListeners]);
+  useEffect(() => () => { generationRef.current += 1; clearAnimationListeners(); activeAnimationRef.current = null; }, [clearAnimationListeners]);
 
   return (
     <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-[#0b1018] p-2 shadow-[0_30px_80px_rgba(0,0,0,0.8)] sm:p-3">
