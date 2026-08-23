@@ -13,7 +13,7 @@ type Props = {
   request: RouletteAnimationRequest | null;
   resetToken: number;
   onAnimatingChange: (value: boolean) => void;
-  onFinished: () => void;
+  onFinished: (requestId: string) => void;
 };
 
 const CaseRoulette = forwardRef<CaseRouletteHandle, Props>(function CaseRoulette(props, ref) {
