@@ -116,8 +116,8 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
       <div ref={viewportRef} className="relative min-h-[150px] overflow-hidden rounded-[24px] border border-white/[0.055] bg-black/30 py-3 sm:min-h-[176px] sm:py-5">
         <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-16 bg-gradient-to-r from-[#0b1018] via-[#0b1018]/55 to-transparent sm:w-28" />
         <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-16 bg-gradient-to-l from-[#0b1018] via-[#0b1018]/55 to-transparent sm:w-28" />
-        <div ref={trackRef} className="flex" style={{ gap: "14px", willChange: "transform" }}>
-          {slots.map((item, index) => <div key={item.slotUid ?? `${item.id}-${index}`} className="relative transition-opacity duration-300" style={{ opacity: revealWinner && winnerIndex !== index ? 0.28 : 1 }}><DropCard item={item} winner={revealWinner && winnerIndex === index} /></div>)}
+        <div ref={trackRef} className="flex" style={{ gap: "14px", willChange: "transform", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
+          {slots.map((item, index) => <div key={item.slotUid ?? `${item.id}-${index}`} className="relative shrink-0 transform-gpu transition-opacity duration-300" style={{ opacity: revealWinner && winnerIndex !== index ? 0.28 : 1, contentVisibility: "auto", containIntrinsicSize: "210px 150px" }}><DropCard item={item} winner={revealWinner && winnerIndex === index} /></div>)}
         </div>
       </div>
     </div>
