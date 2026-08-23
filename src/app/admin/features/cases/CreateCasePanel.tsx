@@ -32,11 +32,14 @@ export default function CreateCasePanel({ role }: { role: Role }) {
     setSubmitting(true);
     setMessage("");
     try {
+      // Copy the draft before sending it so later UI changes cannot mutate the
+      // exact image URLs that are persisted with the case.
+      const stableDrops = drops.map((drop) => ({ ...drop, image: String(drop.image) }));
       const response = await fetch("/api/admin/cases", {
         method: "POST",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, image: caseImage, price: casePrice, probabilityMode, drops }),
+        body: JSON.stringify({ name, image: String(caseImage), price: casePrice, probabilityMode, drops: stableDrops }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) setMessage(data?.error || "Не удалось создать кейс.");
