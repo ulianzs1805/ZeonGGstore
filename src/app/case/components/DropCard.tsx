@@ -1,10 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { getRarityCardClass } from "@/lib/rarity-styles";
 import type { CaseItem } from "../lib/types";
 
 export default function DropCard({ item, winner = false }: { item: CaseItem; winner?: boolean }) {
+  const [imageError, setImageError] = useState(false);
+  const imageSrc = typeof item.image === "string" ? item.image.trim() : "";
+
   return (
     <div
       className={[
@@ -15,17 +19,24 @@ export default function DropCard({ item, winner = false }: { item: CaseItem; win
     >
       {winner && <div className="pointer-events-none absolute inset-0 rounded-[22px] bg-yellow-300/10 blur-xl" />}
       <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[18px]">
-        <Image
-          src={item.image}
-          alt={item.name}
-          fill
-          className="object-contain"
-          sizes="112px"
-          unoptimized
-          loading="eager"
-          priority={winner}
-          draggable={false}
-        />
+        {imageSrc && !imageError ? (
+          <Image
+            src={imageSrc}
+            alt={item.name}
+            fill
+            className="object-contain"
+            sizes="112px"
+            unoptimized
+            loading="lazy"
+            priority={winner}
+            draggable={false}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-center text-xs font-semibold text-slate-400">
+            Изображение недоступно
+          </div>
+        )}
       </div>
       <h3 className={`mt-3 text-center font-black ${item.color}`}>{item.name}</h3>
       <p className="mt-1 text-[11px] font-medium uppercase text-slate-200/80">{item.rarity}</p>
