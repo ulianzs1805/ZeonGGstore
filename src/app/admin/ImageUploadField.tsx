@@ -1,50 +1,75 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useId, useState } from "react";
 
-export default function ImageUploadField({ label, value, onChange, caseFolder = "" }: { label: string; value: string; onChange: (value: string) => void; caseFolder?: string }) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [status, setStatus] = useState("");
+export default function ImageUploadField({
+  label,
+  value,
+  onChange,
+  caseFolder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  caseFolder: string;
+}) {
+  const inputId = useId();
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
 
   const upload = async (file: File) => {
-    if (uploading) return;
     setUploading(true);
-    setStatus("Загружаем изображение...");
+    setError("");
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      if (caseFolder.trim()) formData.append("caseFolder", caseFolder.trim());
+      formData.set("file", file);
+      formData.set("caseFolder", caseFolder);
       const response = await fetch("/api/admin/uploads", { method: "POST", body: formData, cache: "no-store" });
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.imageUrl) {
-        setStatus(data?.error || "Не удалось загрузить изображение.");
+        setError(data?.error || "Не удалось загрузить изображение.");
         return;
       }
-      onChange(data.imageUrl);
-      setStatus(data.processed === false ? "Изображение сохранено без удаления фона" : "Изображение обработано и готово");
+      // Store the server URL exactly as returned by the upload API. Do not
+      // transform it here: the same stable URL is later used by the roulette.
+      onChange(String(data.imageUrl));
     } catch {
-      setStatus("Ошибка сети. Попробуйте загрузить изображение ещё раз.");
+      setError("Ошибка сети при загрузке изображения.");
     } finally {
       setUploading(false);
     }
   };
 
-  const accept = (file: File | undefined) => {
-    if (file) void upload(file);
-  };
-
   return (
-    <div className="min-w-0">
-      <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <button type="button" disabled={uploading} onClick={() => inputRef.current?.click()} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); accept(event.dataTransfer.files[0]); }} className={`relative flex min-h-52 w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed p-5 text-center transition disabled:cursor-wait disabled:opacity-70 ${dragging ? "border-violet-300 bg-violet-400/15" : "border-violet-300/30 bg-black/20 hover:border-violet-200/70"}`}>
-        <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" className="sr-only" onChange={(event) => { accept(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-        {value ? <><Image src={value} alt="Processed preview" fill className="object-contain p-5" sizes="(max-width: 640px) 100vw, 520px" unoptimized /><span className="absolute bottom-3 max-w-[90%] rounded-full bg-black/70 px-3 py-1 text-[0.65rem] font-bold text-emerald-200">{status || "Изображение готово"}</span></> : <><span className="text-4xl font-light text-violet-200">{uploading ? "…" : "+"}</span><span className="mt-2 text-sm font-bold text-white">{uploading ? "Загрузка и обработка..." : dragging ? "Отпустите файл для загрузки" : "Загрузить изображение"}</span><span className="mt-2 text-xs text-slate-400">PNG / JPG / WEBP · до 12 МБ</span><span className="mt-1 text-xs text-slate-500">Нажмите или перетащите файл сюда</span></>}
-      </button>
-      {status && !value && <p className="mt-2 text-xs text-amber-200">{status}</p>}
-      {value && <div className="mt-2 flex flex-wrap items-center justify-between gap-3"><span className="text-xs text-emerald-200">{status || "Изображение готово"}</span><button type="button" disabled={uploading} onClick={() => { onChange(""); setStatus(""); }} className="text-xs font-bold text-slate-400 hover:text-white disabled:opacity-50">Заменить</button></div>}
+    <div className="space-y-2">
+      <label htmlFor={inputId} className="block text-sm font-bold">{label}</label>
+      <input
+        id={inputId}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        disabled={uploading}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void upload(file);
+          event.currentTarget.value = "";
+        }}
+        className="block w-full text-sm"
+      />
+      {value && (
+        <div className="relative h-36 overflow-hidden rounded-xl border border-white/10 bg-black/20">
+          <Image
+            src={value}
+            alt={label}
+            fill
+            sizes="(max-width: 640px) 100vw, 400px"
+            className="object-contain p-5"
+            unoptimized
+          />
+        </div>
+      )}
+      {uploading && <p className="text-xs text-slate-400">Загрузка и обработка...</p>}
+      {error && <p className="text-xs text-red-300">{error}</p>}
     </div>
   );
 }
