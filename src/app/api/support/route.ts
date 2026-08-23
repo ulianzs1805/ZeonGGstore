@@ -25,13 +25,7 @@ export async function GET() {
     );
   } catch (error) {
     console.error("GET /api/support failed", error);
-    return NextResponse.json(
-      {
-        error: "Не удалось загрузить обращения в поддержку",
-        message: error instanceof Error ? error.message : "Unknown server error",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Не удалось загрузить обращения в поддержку" }, { status: 500 });
   }
 }
 
@@ -49,10 +43,7 @@ export async function POST(request: Request) {
     }
 
     if (subject.length > MAX_SUBJECT_LENGTH || description.length > MAX_DESCRIPTION_LENGTH) {
-      return NextResponse.json(
-        { error: "Обращение слишком длинное." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Обращение слишком длинное." }, { status: 400 });
     }
 
     const ticket = await prisma.supportTicket.create({
@@ -62,12 +53,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ticket }, { status: 201 });
   } catch (error) {
     console.error("POST /api/support failed", error);
-    return NextResponse.json(
-      {
-        error: "Не удалось создать обращение в поддержку",
-        message: error instanceof Error ? error.message : "Unknown server error",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Не удалось создать обращение в поддержку" }, { status: 500 });
   }
 }
