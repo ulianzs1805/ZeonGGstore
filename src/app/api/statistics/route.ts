@@ -13,9 +13,9 @@ export async function GET() {
     prisma.transaction.findMany({ where: { userId: user.id, status: "SUCCESS" }, select: { type: true, zCoinAmount: true } }),
   ]);
 
-  const deposited = transactions
-    .filter((transaction) => transaction.type === "DEPOSIT" || transaction.type === "PURCHASE")
-    .reduce((total, transaction) => total + transaction.zCoinAmount, 0);
+  const earned = transactions
+    .filter((transaction) => ["DEPOSIT", "PURCHASE", "PROMO_ZCOIN", "ZCOIN_GRANT"].includes(transaction.type))
+    .reduce((total, transaction) => total + Math.max(0, transaction.zCoinAmount), 0);
   const spent = transactions
     .filter((transaction) => transaction.type === "CASE_OPEN")
     .reduce((total, transaction) => total + Math.abs(transaction.zCoinAmount), 0);
@@ -27,6 +27,6 @@ export async function GET() {
     soldItems: sales._count,
     soldAmount: sales._sum.amount ?? 0,
     spent,
-    earned: deposited + (sales._sum.amount ?? 0),
+    earned: earned + (sales._sum.amount ?? 0),
   });
 }
