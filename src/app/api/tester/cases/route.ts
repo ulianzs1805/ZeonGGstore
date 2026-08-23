@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requirePermission, writeAuditLog } from "@/lib/rbac";
-import { validateCasePrice, validateChances, validateDropPrice } from "@/lib/economy-guard";
+import { validateCasePrice, validateChances, validateDropPrice, validateRarity } from "@/lib/economy-guard";
 
 function validName(value: unknown): value is string {
   return typeof value === "string" && value.trim().length >= 3 && value.trim().length <= 80 && /^[\p{L}\p{N} ._'"-]+$/u.test(value.trim());
@@ -36,13 +36,46 @@ export async function POST(request: Request) {
   const existing = await prisma.case.findFirst({ where: { OR: [{ name }, { slug }] } });
   if (existing) return NextResponse.json({ error: "Case name/slug exists" }, { status: 409 });
 
-  const normalized = drops.map(d => ({ name: typeof d.name === "string" ? d.name.trim() : "", rarity: typeof d.rarity === "string" ? d.rarity.trim() : "", image: typeof d.image === "string" ? d.image.trim() : "", price: typeof d.price === "number" ? d.price : NaN, probability: typeof d.probability === "number" ? d.probability : NaN }));
+  const normalized = drops.map(d => ({
+    name: typeof d.name === "string" ? d.name.trim() : "",
+    rarity: typeof d.rarity === "string" ? d.rarity.trim() : "",
+    image: typeof d.image === "string" ? d.image.trim() : "",
+    price: typeof d.price === "number" ? d.price : NaN,
+    probability: typeof d.probability === "number" ? d.probability : NaN,
+  }));
   if (normalized.length === 0) return NextResponse.json({ error: "Add at least one drop" }, { status: 400 });
-  if (normalized.some((drop) => !drop.name || !validateDropPrice(drop.price)) || !validateChances(normalized.map((drop) => drop.probability))) return NextResponse.json({ error: "Prices must be positive and probabilities must total 100" }, { status: 400 });
+  if (
+    normalized.some((drop) => !drop.name || !validateRarity(drop.rarity) || !validateDropPrice(drop.price))
+    || !validateChances(normalized.map((drop) => drop.probability))
+  ) {
+    return NextResponse.json({ error: "Prices, rarities and probabilities are invalid; probabilities must total 100" }, { status: 400 });
+  }
 
   try {
     const created = await prisma.$transaction(async (tx) => {
-      const c = await tx.case.create({ data: { slug, name, description, image: image || "/cases/default-case.png", price, probabilityMode, createdById: access.user!.id, environment: "TEST", drops: { create: normalized.map(d => ({ name: d.name, rarity: "", image: d.image, price: d.price, probability: d.probability, environment: "TEST" })) } }, include: { drops: true } });
+      const c = await tx.case.create({
+        data: {
+          slug,
+          name,
+          description,
+          image: image || "/cases/default-case.png",
+          price,
+          probabilityMode,
+          createdById: access.user!.id,
+          environment: "TEST",
+          drops: {
+            create: normalized.map(d => ({
+              name: d.name,
+              rarity: d.rarity,
+              image: d.image,
+              price: d.price,
+              probability: d.probability,
+              environment: "TEST",
+            })),
+          },
+        },
+        include: { drops: true },
+      });
       await tx.auditLog.create({ data: { actorUserId: access.user!.id, actorRole: access.user!.role, actorAdminId: null, action: "TEST_CASE_CREATED", targetType: "CASE", targetId: c.id, metadata: JSON.stringify({ drops: c.drops.length }), status: "SUCCESS" } });
       return c;
     });
