@@ -21,6 +21,11 @@ function makeSafeFolder(value: string) {
   return latin || `case-${Date.now().toString(36)}`;
 }
 
+function getUploadError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "Unknown upload error";
+}
+
 export async function POST(request: Request) {
   const access = await requirePermission("CASE_CREATE");
   if (!access.user) return access.response;
@@ -40,16 +45,21 @@ export async function POST(request: Request) {
   const mimeAllowed = !file.type || ALLOWED_TYPES.has(file.type);
 
   if (!mimeAllowed || !ALLOWED_EXTENSIONS.has(extension)) {
-    return NextResponse.json(
-      { error: "Разрешены только PNG, JPG и WEBP." },
-      { status: 415 },
-    );
+    return NextResponse.json({ error: "Разрешены только PNG, JPG и WEBP." }, { status: 415 });
   }
 
   if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
     return NextResponse.json(
       { error: "Размер изображения должен быть от 1 байта до 12 МБ." },
       { status: 413 },
+    );
+  }
+
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error("POST /api/admin/uploads: BLOB_READ_WRITE_TOKEN is missing");
+    return NextResponse.json(
+      { error: "Blob Storage не подключён: отсутствует BLOB_READ_WRITE_TOKEN в окружении Vercel." },
+      { status: 500 },
     );
   }
 
@@ -114,14 +124,14 @@ export async function POST(request: Request) {
         : "Изображение сохранено в постоянное хранилище без обработки.",
     });
   } catch (error) {
-    console.error("POST /api/admin/uploads failed", error);
+    const reason = getUploadError(error);
+    console.error("POST /api/admin/uploads failed", { reason, error });
 
     return NextResponse.json(
       {
-        error:
-          "Не удалось сохранить изображение. Проверьте подключение Blob Storage и попробуйте ещё раз.",
+        error: `Не удалось сохранить изображение в Blob Storage: ${reason}`,
       },
-      { status: 422 },
+      { status: 502 },
     );
   }
 }
