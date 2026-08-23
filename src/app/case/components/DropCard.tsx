@@ -5,13 +5,31 @@ import { useEffect, useMemo, useState } from "react";
 import { getRarityCardClass } from "@/lib/rarity-styles";
 import type { CaseItem } from "../lib/types";
 
+const IMAGE_RETRY_LIMIT = 3;
+const IMAGE_RETRY_DELAY = 250;
+
 export default function DropCard({ item, winner = false }: { item: CaseItem; winner?: boolean }) {
   const imageSrc = useMemo(() => (typeof item.image === "string" ? item.image.trim() : ""), [item.image]);
   const [imageError, setImageError] = useState(false);
+  const [imageAttempt, setImageAttempt] = useState(0);
 
   useEffect(() => {
     setImageError(false);
+    setImageAttempt(0);
   }, [imageSrc]);
+
+  useEffect(() => {
+    if (!imageSrc || !imageError || imageAttempt >= IMAGE_RETRY_LIMIT) return;
+    const timer = window.setTimeout(() => {
+      setImageError(false);
+      setImageAttempt((attempt) => attempt + 1);
+    }, IMAGE_RETRY_DELAY);
+    return () => window.clearTimeout(timer);
+  }, [imageSrc, imageError, imageAttempt]);
+
+  const retrySrc = imageSrc && imageAttempt > 0
+    ? `${imageSrc}${imageSrc.includes("?") ? "&" : "?"}zeon_retry=${imageAttempt}`
+    : imageSrc;
 
   return (
     <div
@@ -25,7 +43,8 @@ export default function DropCard({ item, winner = false }: { item: CaseItem; win
       <div className="relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-[18px]">
         {imageSrc && !imageError ? (
           <Image
-            src={imageSrc}
+            key={`${imageSrc}:${imageAttempt}`}
+            src={retrySrc}
             alt={item.name}
             fill
             className="object-contain"
@@ -36,6 +55,8 @@ export default function DropCard({ item, winner = false }: { item: CaseItem; win
             draggable={false}
             onError={() => setImageError(true)}
           />
+        ) : imageSrc && imageAttempt < IMAGE_RETRY_LIMIT ? (
+          <div className="h-full w-full" aria-hidden="true" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-center text-xs font-semibold text-slate-400">
             Изображение недоступно
