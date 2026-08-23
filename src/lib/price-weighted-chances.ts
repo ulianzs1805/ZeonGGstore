@@ -32,7 +32,9 @@ function readRarityWeights() {
     const parsed = JSON.parse(configured) as Record<string, unknown>;
     const weights = { ...DEFAULT_RARITY_WEIGHTS };
     for (const [rarity, weight] of Object.entries(parsed)) {
-      if (typeof weight === "number" && Number.isFinite(weight) && weight > 0) weights[rarity.toUpperCase()] = weight;
+      if (typeof weight === "number" && Number.isFinite(weight) && weight > 0) {
+        weights[rarity.toUpperCase()] = weight;
+      }
     }
     return weights;
   } catch {
@@ -50,15 +52,21 @@ export function getProbabilityPolicy() {
 
 export function calculateFinalProbabilities<T extends ProbabilityDrop>(drops: T[], mode: ProbabilityMode = "DYNAMIC") {
   if (!drops.length) return [];
+
   const policy = getProbabilityPolicy();
   const weights = drops.map((drop) => {
-    if (!Number.isFinite(drop.price) || drop.price <= 0 || !Number.isFinite(drop.probability) || drop.probability <= 0) return 0;
-    if (mode === "MANUAL") return drop.probability;
+    if (!Number.isFinite(drop.price) || drop.price <= 0) return 0;
+
+    if (mode === "MANUAL") {
+      return Number.isFinite(drop.probability) && drop.probability > 0 ? drop.probability : 0;
+    }
+
     const rarityWeight = policy.rarityWeights[drop.rarity.trim().toUpperCase()] ?? policy.rarityWeights.NAMELESS;
-    const normalizedPrice = drop.price / policy.priceReference;
+    const normalizedPrice = Math.max(drop.price / policy.priceReference, 0.0001);
     const priceFactor = 1 / Math.pow(normalizedPrice, policy.priceExponent);
     return rarityWeight * priceFactor;
   });
+
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (!Number.isFinite(totalWeight) || totalWeight <= 0) return drops.map(() => 0);
 
