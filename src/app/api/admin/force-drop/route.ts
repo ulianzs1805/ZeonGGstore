@@ -20,10 +20,7 @@ export async function POST(request: Request) {
     const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
 
     if (!targetUserId || !caseId || !dropId || reason.length < 5) {
-      return NextResponse.json(
-        { error: "Выберите пользователя, кейс, Drop и причину от 5 символов." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Выберите пользователя, кейс, Drop и причину от 5 символов." }, { status: 400 });
     }
 
     const target = await prisma.user.findUnique({ where: { id: targetUserId } });
@@ -31,14 +28,9 @@ export async function POST(request: Request) {
       where: { OR: [{ id: caseId }, { slug: caseId }], isActive: true },
       include: { drops: true },
     });
-
     const selectedCase = selectedCaseRecord
-      ? {
-          ...selectedCaseRecord,
-          drops: withFinalProbabilities(selectedCaseRecord.drops, selectedCaseRecord.probabilityMode),
-        }
+      ? { ...selectedCaseRecord, drops: withFinalProbabilities(selectedCaseRecord.drops, selectedCaseRecord.probabilityMode) }
       : null;
-
     const drop = selectedCase?.drops.find((item) => item.id === dropId);
 
     if (!target || !selectedCase || !drop) {
@@ -46,29 +38,24 @@ export async function POST(request: Request) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Serialize assignment creation so two admins cannot both pass the
+      // cooldown/pending checks and create two Force Drops concurrently.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(91736422)`;
+
       const actorProfile = await tx.devProfile.findUnique({
         where: { userId: access.user!.id },
         select: { devId: true },
       });
-
       const cooldownSince = new Date(Date.now() - FORCE_DROP_COOLDOWN_MS);
       const recentAssignment = await tx.forceDropAssignment.findFirst({
         where: { targetUserId: target.id, createdAt: { gte: cooldownSince } },
         orderBy: { createdAt: "desc" },
       });
-
-      if (recentAssignment) {
-        throw new Error(`FORCE_DROP_COOLDOWN:${recentAssignment.createdAt.toISOString()}`);
-      }
+      if (recentAssignment) throw new Error(`FORCE_DROP_COOLDOWN:${recentAssignment.createdAt.toISOString()}`);
 
       const pending = await tx.forceDropAssignment.findFirst({
-        where: {
-          targetUserId: target.id,
-          caseId: selectedCase.id,
-          status: "PENDING",
-        },
+        where: { targetUserId: target.id, caseId: selectedCase.id, status: "PENDING" },
       });
-
       if (pending) throw new Error("PENDING_FORCE_DROP_EXISTS");
 
       const assignment = await tx.forceDropAssignment.create({
@@ -89,14 +76,7 @@ export async function POST(request: Request) {
           action: "FORCE_DROP_ASSIGNED",
           targetType: "USER",
           targetId: target.id,
-          metadata: JSON.stringify({
-            assignmentId: assignment.id,
-            caseId: selectedCase.id,
-            dropId: drop.id,
-            reason,
-            targetEmail: target.email,
-            probability: drop.probability,
-          }),
+          metadata: JSON.stringify({ assignmentId: assignment.id, caseId: selectedCase.id, dropId: drop.id, reason, targetEmail: target.email, probability: drop.probability }),
           status: "SUCCESS",
         },
       });
@@ -104,18 +84,14 @@ export async function POST(request: Request) {
       return assignment;
     });
 
-    return NextResponse.json(
-      {
-        assignment: result,
-        message: "Drop назначен. Игрок получит его только после обычного открытия этого кейса.",
-      },
-      { status: 201 },
-    );
+    return NextResponse.json({
+      assignment: result,
+      message: "Drop назначен. Игрок получит его только после обычного открытия этого кейса.",
+    }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("FORCE_DROP_COOLDOWN:")) {
       const createdAt = error.message.slice("FORCE_DROP_COOLDOWN:".length);
       const retryAt = new Date(new Date(createdAt).getTime() + FORCE_DROP_COOLDOWN_MS);
-
       await writeAuditLog({
         actorUserId: access.user.id,
         actorRole: access.user.role,
@@ -124,30 +100,12 @@ export async function POST(request: Request) {
         metadata: { retryAt: retryAt.toISOString() },
         status: "FAILED",
       }).catch(() => null);
-
-      return NextResponse.json(
-        {
-          error: "Для этого аккаунта Force Drop уже использовался. Повторно можно через 24 часа.",
-          retryAt: retryAt.toISOString(),
-        },
-        { status: 429 },
-      );
+      return NextResponse.json({ error: "Для этого аккаунта Force Drop уже использовался. Повторно можно через 24 часа.", retryAt: retryAt.toISOString() }, { status: 429 });
     }
-
     if (error instanceof Error && error.message === "PENDING_FORCE_DROP_EXISTS") {
-      return NextResponse.json(
-        { error: "Для этого игрока и кейса уже есть ожидающий Force Drop." },
-        { status: 409 },
-      );
+      return NextResponse.json({ error: "Для этого игрока и кейса уже есть ожидающий Force Drop." }, { status: 409 });
     }
-
     console.error("POST /api/admin/force-drop failed", error);
-    return NextResponse.json(
-      {
-        error: "Не удалось назначить Force Drop.",
-        message: error instanceof Error ? error.message : "Unknown server error",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Не удалось назначить Force Drop.", message: error instanceof Error ? error.message : "Unknown server error" }, { status: 500 });
   }
 }
