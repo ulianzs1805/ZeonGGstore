@@ -11,7 +11,7 @@ const DEFAULT_ADMIN_CASE_PRICE = 199;
 const RESERVED_CATALOG_CASE_NAMES = new Set(["furious", "fable", "empire", "chameleon"]);
 
 function validName(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length >= 3 && value.trim().length <= 80 && /^[\p{L}\p{N} ._'\"-]+$/u.test(value.trim());
+  return typeof value === "string" && value.trim().length >= 3 && value.trim().length <= 80 && /^[\p{L}\p{N} ._'"-]+$/u.test(value.trim());
 }
 function normalizeCaseName(value: string) { return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("ru-RU"); }
 function processedImage(value: string) {
