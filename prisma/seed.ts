@@ -9,7 +9,6 @@ const cases = [
   { slug: "empire", name: "Empire Case", description: "Empire collection case", image: "/cases/empire-case.png", price: 1000 },
 ] as const;
 
-// Catalog defaults. Fable's M4 Samurai must point to the Fable folder.
 const drops = [
   { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 220 },
   { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 160 },
@@ -39,12 +38,7 @@ const furiousDrops = [
 const legacyFuriousDropNames = ["AKR Necromancer", "G22 Monster", "M4 Samurai", "AWM Winter Sport"] as const;
 
 async function main() {
-  const dev = await prisma.user.upsert({
-    where: { email: "wystley6@gmail.com" },
-    update: { role: Role.NPN1_DEV },
-    create: { email: "wystley6@gmail.com", name: "Zeon Dev", role: Role.NPN1_DEV, balance: 10000 },
-  });
-
+  const dev = await prisma.user.upsert({ where: { email: "wystley6@gmail.com" }, update: { role: Role.NPN1_DEV }, create: { email: "wystley6@gmail.com", name: "Zeon Dev", role: Role.NPN1_DEV, balance: 10000 } });
   for (const item of cases) {
     const caseDrops = item.slug === "furious" ? furiousDrops : drops;
     const existing = await prisma.case.findUnique({ where: { slug: item.slug }, include: { drops: { orderBy: { createdAt: "asc" } } } });
@@ -60,5 +54,4 @@ async function main() {
     if (item.slug === "furious" && existing && existingDrops && existingDrops.length > caseDrops.length) await prisma.drop.deleteMany({ where: { caseId: currentCase.id, id: { in: existingDrops.slice(caseDrops.length).map((drop) => drop.id) } } });
   }
 }
-
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { await prisma.$disconnect(); });
