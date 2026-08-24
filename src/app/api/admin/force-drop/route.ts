@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, writeAuditLog } from "@/lib/rbac";
-import { ensureSystemCatalog } from "@/lib/system-catalog";
 import { withFinalProbabilities } from "@/lib/price-weighted-chances";
 
 const FORCE_DROP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -11,8 +10,6 @@ export async function POST(request: Request) {
   if (!access.user) return access.response;
 
   try {
-    await ensureSystemCatalog(prisma);
-
     const body = await request.json().catch(() => null);
     const targetUserId = typeof body?.targetUserId === "string" ? body.targetUserId : "";
     const caseId = typeof body?.caseId === "string" ? body.caseId : "";
@@ -38,8 +35,6 @@ export async function POST(request: Request) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // Serialize assignment creation so two admins cannot both pass the
-      // cooldown/pending checks and create two Force Drops concurrently.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(91736422)`;
 
       const actorProfile = await tx.devProfile.findUnique({
