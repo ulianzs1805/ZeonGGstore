@@ -2,13 +2,14 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 
-const googleClientId = process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID || process.env.NEXTAUTH_GOOGLE_ID;
-const googleClientSecret = process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET || process.env.NEXTAUTH_GOOGLE_SECRET;
+const googleClientId = process.env.AUTH_GOOGLE_ID?.trim();
+const googleClientSecret = process.env.AUTH_GOOGLE_SECRET?.trim();
 const hasGoogleConfig = Boolean(googleClientId && googleClientSecret);
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
+  trustHost: true,
   providers: hasGoogleConfig
     ? [
         GoogleProvider({
