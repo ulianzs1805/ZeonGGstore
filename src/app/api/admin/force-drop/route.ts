@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, writeAuditLog } from "@/lib/rbac";
-import { withFinalProbabilities } from "@/lib/price-weighted-chances";
 
 const FORCE_DROP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
@@ -20,48 +20,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Выберите пользователя, кейс, Drop и причину от 5 символов." }, { status: 400 });
     }
 
-    const target = await prisma.user.findUnique({ where: { id: targetUserId } });
-    const selectedCaseRecord = await prisma.case.findFirst({
-      where: { OR: [{ id: caseId }, { slug: caseId }], isActive: true },
-      include: { drops: true },
-    });
-    const selectedCase = selectedCaseRecord
-      ? { ...selectedCaseRecord, drops: withFinalProbabilities(selectedCaseRecord.drops, selectedCaseRecord.probabilityMode) }
-      : null;
-    const drop = selectedCase?.drops.find((item) => item.id === dropId);
+    const [target, selectedCase, drop] = await Promise.all([
+      prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true, email: true } }),
+      prisma.case.findFirst({ where: { OR: [{ id: caseId }, { slug: caseId }], isActive: true }, select: { id: true, slug: true, name: true } }),
+      prisma.drop.findUnique({ where: { id: dropId }, select: { id: true, caseId: true, name: true, rarity: true, probability: true, price: true } }),
+    ]);
 
-    if (!target || !selectedCase || !drop) {
-      return NextResponse.json({ error: "Пользователь, кейс или Drop не найден." }, { status: 404 });
-    }
+    if (!target) return NextResponse.json({ error: "Пользователь не найден." }, { status: 404 });
+    if (!selectedCase) return NextResponse.json({ error: "Активный кейс не найден." }, { status: 404 });
+    if (!drop) return NextResponse.json({ error: "Drop не найден. Обновите список кейсов и выберите Drop заново." }, { status: 404 });
+    if (drop.caseId !== selectedCase.id) return NextResponse.json({ error: "Выбранный Drop принадлежит другому кейсу. Обновите список и выберите Drop заново." }, { status: 409 });
 
     const result = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(91736422)`;
 
-      const actorProfile = await tx.devProfile.findUnique({
-        where: { userId: access.user!.id },
-        select: { devId: true },
-      });
+      const actorProfile = await tx.devProfile.findUnique({ where: { userId: access.user!.id }, select: { devId: true } });
       const cooldownSince = new Date(Date.now() - FORCE_DROP_COOLDOWN_MS);
-      const recentAssignment = await tx.forceDropAssignment.findFirst({
-        where: { targetUserId: target.id, createdAt: { gte: cooldownSince } },
-        orderBy: { createdAt: "desc" },
-      });
+      const recentAssignment = await tx.forceDropAssignment.findFirst({ where: { targetUserId: target.id, createdAt: { gte: cooldownSince } }, orderBy: { createdAt: "desc" } });
       if (recentAssignment) throw new Error(`FORCE_DROP_COOLDOWN:${recentAssignment.createdAt.toISOString()}`);
 
-      const pending = await tx.forceDropAssignment.findFirst({
-        where: { targetUserId: target.id, caseId: selectedCase.id, status: "PENDING" },
-      });
+      const pending = await tx.forceDropAssignment.findFirst({ where: { targetUserId: target.id, caseId: selectedCase.id, status: "PENDING" } });
       if (pending) throw new Error("PENDING_FORCE_DROP_EXISTS");
 
-      const assignment = await tx.forceDropAssignment.create({
-        data: {
-          targetUserId: target.id,
-          caseId: selectedCase.id,
-          dropId: drop.id,
-          assignedById: access.user!.id,
-          reason,
-        },
-      });
+      const assignment = await tx.forceDropAssignment.create({ data: { targetUserId: target.id, caseId: selectedCase.id, dropId: drop.id, assignedById: access.user!.id, reason } });
 
       await tx.auditLog.create({
         data: {
@@ -79,28 +60,19 @@ export async function POST(request: Request) {
       return assignment;
     });
 
-    return NextResponse.json({
-      assignment: result,
-      message: "Drop назначен. Игрок получит его только после обычного открытия этого кейса.",
-    }, { status: 201 });
+    return NextResponse.json({ assignment: result, message: "Drop назначен. Игрок получит его только после обычного открытия этого кейса." }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("FORCE_DROP_COOLDOWN:")) {
       const createdAt = error.message.slice("FORCE_DROP_COOLDOWN:".length);
       const retryAt = new Date(new Date(createdAt).getTime() + FORCE_DROP_COOLDOWN_MS);
-      await writeAuditLog({
-        actorUserId: access.user.id,
-        actorRole: access.user.role,
-        action: "FORCE_DROP_COOLDOWN_BLOCKED",
-        targetType: "USER",
-        metadata: { retryAt: retryAt.toISOString() },
-        status: "FAILED",
-      }).catch(() => null);
+      await writeAuditLog({ actorUserId: access.user.id, actorRole: access.user.role, action: "FORCE_DROP_COOLDOWN_BLOCKED", targetType: "USER", metadata: { retryAt: retryAt.toISOString() }, status: "FAILED" }).catch(() => null);
       return NextResponse.json({ error: "Для этого аккаунта Force Drop уже использовался. Повторно можно через 24 часа.", retryAt: retryAt.toISOString() }, { status: 429 });
     }
-    if (error instanceof Error && error.message === "PENDING_FORCE_DROP_EXISTS") {
-      return NextResponse.json({ error: "Для этого игрока и кейса уже есть ожидающий Force Drop." }, { status: 409 });
-    }
+    if (error instanceof Error && error.message === "PENDING_FORCE_DROP_EXISTS") return NextResponse.json({ error: "Для этого игрока и кейса уже есть ожидающий Force Drop." }, { status: 409 });
+
     console.error("POST /api/admin/force-drop failed", error);
-    return NextResponse.json({ error: "Не удалось назначить Force Drop.", message: error instanceof Error ? error.message : "Unknown server error" }, { status: 500 });
+    const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null;
+    const detail = error instanceof Error ? error.message : "Unknown server error";
+    return NextResponse.json({ error: "Не удалось назначить Force Drop.", detail, code: prismaCode }, { status: 500 });
   }
 }
