@@ -5,11 +5,10 @@ import { validateDropPrice } from "@/lib/economy-guard";
 import { calculateFinalProbabilities } from "@/lib/price-weighted-chances";
 import { ensureSystemCatalog } from "@/lib/system-catalog";
 
-const DEV_MAX_PRICE = 10000;
 const NPN1_MAX_PRICE = 100000;
 
-function maxPriceForRole(role: "DEV" | "NPN1_DEV") {
-  return role === "DEV" ? DEV_MAX_PRICE : NPN1_MAX_PRICE;
+function isNpn1Dev(role: string) {
+  return role === "NPN1_DEV";
 }
 
 function attachCaseProbabilities<T extends { id: string; caseId: string; price: number; probability: number; rarity: string; case: { probabilityMode: "MANUAL" | "DYNAMIC" } }>(drops: T[]) {
@@ -47,28 +46,29 @@ export async function GET() {
   }
   return NextResponse.json({
     drops: [...uniqueSkins.values()],
-    policy: { minPrice: 1, maxPrice: maxPriceForRole(access.user.role as "DEV" | "NPN1_DEV") },
+    policy: { minPrice: 1, maxPrice: NPN1_MAX_PRICE, priceEditable: isNpn1Dev(access.user.role) },
   });
 }
 
 export async function PATCH(request: Request) {
   const access = await requirePermission("SKIN_PRICE_MANAGE");
   if (!access.user) return access.response;
+  if (!isNpn1Dev(access.user.role)) {
+    return NextResponse.json({ error: "Цена зафиксирована. Изменять стоимость скинов может только NPN1_DEV." }, { status: 403 });
+  }
   await ensureSystemCatalog(prisma);
 
   const body = await request.json().catch(() => null) as { dropId?: unknown; price?: unknown } | null;
   const dropId = typeof body?.dropId === "string" ? body.dropId.trim() : "";
   const price = typeof body?.price === "number" ? body.price : NaN;
-  const maxPrice = maxPriceForRole(access.user.role as "DEV" | "NPN1_DEV");
 
   if (!dropId) return NextResponse.json({ error: "Укажите dropId." }, { status: 400 });
-  if (!validateDropPrice(price) || price > maxPrice) {
-    return NextResponse.json({ error: `Цена должна быть целым числом от 1 до ${maxPrice} Z-Coin.` }, { status: 400 });
+  if (!validateDropPrice(price) || price > NPN1_MAX_PRICE) {
+    return NextResponse.json({ error: `Цена должна быть целым числом от 1 до ${NPN1_MAX_PRICE} Z-Coin.` }, { status: 400 });
   }
 
   const target = await prisma.drop.findUnique({ where: { id: dropId }, include: { case: { select: { name: true, slug: true, environment: true, probabilityMode: true } } } });
   if (!target) return NextResponse.json({ error: "Скин не найден." }, { status: 404 });
-  if (target.case.slug === "furious") return NextResponse.json({ error: "Цены Furious collection зафиксированы и не изменяются через админ-панель." }, { status: 403 });
 
   try {
     const updated = await prisma.$transaction(async (tx) => {
@@ -89,7 +89,7 @@ export async function PATCH(request: Request) {
           action: "SKIN_PRICE_UPDATED",
           targetType: "DROP",
           targetId: dropId,
-          metadata: JSON.stringify({ skinName: target.name, caseName: target.case.name, environment: target.case.environment, oldPrice: target.price, newPrice: price, affectedDropCount: matchingDrops.length, affectedInventoryCount: inventoryUpdate.count, oldEffectiveProbability, newEffectiveProbability: effectiveProbability, maxPrice }),
+          metadata: JSON.stringify({ skinName: target.name, caseName: target.case.name, environment: target.case.environment, oldPrice: target.price, newPrice: price, affectedDropCount: matchingDrops.length, affectedInventoryCount: inventoryUpdate.count, oldEffectiveProbability, newEffectiveProbability: effectiveProbability, maxPrice: NPN1_MAX_PRICE }),
           status: "SUCCESS",
         },
       });
