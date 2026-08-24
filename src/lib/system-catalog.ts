@@ -1,10 +1,13 @@
 import { Environment, Prisma, PrismaClient } from "@prisma/client";
 
+// Prices here are actual catalog prices used by the upgrader. Never derive an
+// item's market value from the case price: a cheap skin must stay cheap and
+// simply be excluded when the selected input is more expensive.
 export const SYSTEM_DROPS = [
-  { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, priceMultiplier: 2 },
-  { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, priceMultiplier: 4 },
-  { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, priceMultiplier: 7 },
-  { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/m4-samurai.png", probability: 10, priceMultiplier: 10 },
+  { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 95 },
+  { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 150 },
+  { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 7000 },
+  { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/m4-samurai.png", probability: 10, price: 120 },
 ] as const;
 
 export const FURIOUS_DROPS = [
@@ -32,8 +35,6 @@ let syncPromise: Promise<void> | null = null;
 
 export function ensureSystemCatalog(prisma: PrismaClient) {
   syncPromise ??= prisma.$transaction(async (tx) => {
-    // pg_advisory_xact_lock returns PostgreSQL's `void` type. Prisma cannot
-    // deserialize that through $queryRaw, so execute it as a command instead.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(91736421)`;
     await syncCatalog(tx);
   }).catch((error) => {
@@ -54,29 +55,20 @@ async function syncCatalog(db: CatalogDb) {
   for (const currentCase of cases) {
     if (currentCase.slug === "furious") {
       await db.drop.deleteMany({
-        where: {
-          caseId: currentCase.id,
-          name: { in: [...LEGACY_FURIOUS_DROP_NAMES] },
-        },
+        where: { caseId: currentCase.id, name: { in: [...LEGACY_FURIOUS_DROP_NAMES] } },
       });
     }
 
     const targetProbabilityMode = currentCase.slug === "furious" ? "MANUAL" : "DYNAMIC";
     if (currentCase.probabilityMode !== targetProbabilityMode) {
-      await db.case.update({
-        where: { id: currentCase.id },
-        data: { probabilityMode: targetProbabilityMode },
-      });
+      await db.case.update({ where: { id: currentCase.id }, data: { probabilityMode: targetProbabilityMode } });
     }
 
     const definitions = currentCase.slug === "furious" ? FURIOUS_DROPS : SYSTEM_DROPS;
-    const existingDrops = await db.drop.findMany({
-      where: { caseId: currentCase.id },
-      orderBy: { createdAt: "asc" },
-    });
-
+    const existingDrops = await db.drop.findMany({ where: { caseId: currentCase.id }, orderBy: { createdAt: "asc" } });
     const unmatched = existingDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name));
-    const reusable = unmatched.slice(0, Math.max(0, definitions.length - existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length));
+    const matchedCount = existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length;
+    const reusable = unmatched.slice(0, Math.max(0, definitions.length - matchedCount));
     const reusableById = new Set(reusable.map((drop) => drop.id));
 
     for (const definition of definitions) {
@@ -85,7 +77,8 @@ async function syncCatalog(db: CatalogDb) {
         rarity: definition.rarity,
         image: definition.image,
         probability: definition.probability,
-        price: "price" in definition ? definition.price : currentCase.price * definition.priceMultiplier,
+        // Explicit catalog price only. No case-price multiplier is allowed.
+        price: definition.price,
         environment: Environment.SYSTEM,
       };
 
@@ -105,18 +98,8 @@ async function syncCatalog(db: CatalogDb) {
       await db.drop.create({ data: { ...data, caseId: currentCase.id } });
     }
 
-    const finalDrops = await db.drop.findMany({
-      where: { caseId: currentCase.id },
-      orderBy: { createdAt: "asc" },
-    });
-    const idsToDelete = finalDrops
-      .filter((drop) => !definitions.some((definition) => definition.name === drop.name))
-      .map((drop) => drop.id);
-
-    if (idsToDelete.length) {
-      await db.drop.deleteMany({
-        where: { caseId: currentCase.id, id: { in: idsToDelete } },
-      });
-    }
+    const finalDrops = await db.drop.findMany({ where: { caseId: currentCase.id }, orderBy: { createdAt: "asc" } });
+    const idsToDelete = finalDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name)).map((drop) => drop.id);
+    if (idsToDelete.length) await db.drop.deleteMany({ where: { caseId: currentCase.id, id: { in: idsToDelete } } });
   }
 }
