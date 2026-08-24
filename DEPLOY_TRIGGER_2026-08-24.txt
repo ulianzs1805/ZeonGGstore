@@ -1,0 +1,1 @@
+Trigger Vercel deployment for Fable rarity fix commit 62ac1ca1d50ad302c8d3768587ec62e2ee8d3488.
