@@ -58,12 +58,13 @@ const LEGACY_FURIOUS_DROP_NAMES = ["AKR Necromancer", "G22 Monster", "M4 Samurai
 let syncPromise: Promise<void> | null = null;
 
 export function ensureSystemCatalog(prisma: PrismaClient) {
-  syncPromise ??= prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(91736421)`;
-    await ensureFableCase(tx);
-    await syncCatalog(tx);
-    await enforceFableExclusiveM4(tx);
-  }, { maxWait: 30000, timeout: 30000 }).catch((error) => {
+  syncPromise ??= (async () => {
+    // Do not hold a long interactive transaction on serverless requests.
+    // The catalog sync touches many rows and must never block case loading.
+    await ensureFableCase(prisma);
+    await syncCatalog(prisma);
+    await enforceFableExclusiveM4(prisma);
+  })().catch((error) => {
     syncPromise = null;
     throw error;
   });
