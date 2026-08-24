@@ -15,20 +15,18 @@ export default function AccountSection({ section }: { section: Section }) {
   const [error, setError] = useState("");
   const [sellingId, setSellingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<void> => {
     const response = await fetch("/api/profile", { cache: "no-store" });
     if (!response.ok) throw new Error("Не удалось загрузить данные аккаунта");
     const next = await response.json() as ProfileData;
     setData(next);
-    return next;
   }, []);
 
-  const loadStatistics = useCallback(async () => {
+  const loadStatistics = useCallback(async (): Promise<void> => {
     const response = await fetch("/api/statistics", { cache: "no-store" });
     if (!response.ok) throw new Error("Не удалось загрузить статистику");
     const next = await response.json() as Statistics;
     setStatistics(next);
-    return next;
   }, []);
 
   const refresh = useCallback(async () => {
@@ -73,12 +71,12 @@ export default function AccountSection({ section }: { section: Section }) {
   if (!data && error) return <AccountShell active={section} title="Аккаунт"><StateMessage>{error}</StateMessage></AccountShell>;
   if (!data) return <AccountShell active={section} title="Аккаунт"><StateMessage>Загружаем данные...</StateMessage></AccountShell>;
 
-  return <AccountShell active={section} title={title}>
+  return <AccountShell active={section} title={title} user={data.user}>
     {error && <div className="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
     {section === "inventory" && <InventorySection items={data.inventory} sellingId={sellingId} onSell={(item) => void sell(item)} />}
     {section === "transactions" && <TransactionsSection transactions={data.transactions} />}
     {section === "statistics" && <StatisticsSection statistics={statistics} bestDrop={bestDrop} />}
     {section === "settings" && <SettingsSection user={data.user} onResetBeta={() => void resetBetaAccess()} />}
-    {section === "support" && <SupportTicketPanel tickets={data.tickets} onRefresh={async () => { await load(); }} />}
+    {section === "support" && <SupportTicketPanel tickets={data.tickets} onRefresh={load} />}
   </AccountShell>;
 }
