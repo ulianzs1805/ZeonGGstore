@@ -8,7 +8,11 @@ export const revalidate = 0;
 
 export async function GET() {
   try {
-    await ensureSystemCatalog(prisma);
+    try {
+      await ensureSystemCatalog(prisma);
+    } catch (catalogError) {
+      console.error("GET /api/cases catalog sync failed; continuing with existing cases", catalogError);
+    }
 
     const cases = await prisma.case.findMany({
       where: { isActive: true, environment: "SYSTEM" },
