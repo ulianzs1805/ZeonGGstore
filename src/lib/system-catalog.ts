@@ -190,7 +190,8 @@ async function syncCatalog(db: CatalogDb) {
 
 async function enforceFableExclusiveM4(db: CatalogDb) {
   const fable = await db.case.findUnique({ where: { slug: "fable" }, include: { drops: true } });
-  const canonical = fable?.drops.find((drop) => drop.name === "M4 Samurai");
+  if (!fable) return;
+  const canonical = fable.drops.find((drop) => drop.name === "M4 Samurai");
   if (!canonical) return;
 
   const foreign = await db.drop.findMany({
