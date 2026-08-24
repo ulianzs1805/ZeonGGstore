@@ -69,6 +69,7 @@ async function syncCatalog(db: CatalogDb) {
     const matchedCount = existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length;
     const reusable = unmatched.slice(0, Math.max(0, definitions.length - matchedCount));
     const reusableById = new Set(reusable.map((drop) => drop.id));
+    const canonicalByName = new Map<string, string>();
 
     for (const definition of definitions) {
       const data = {
@@ -80,9 +81,11 @@ async function syncCatalog(db: CatalogDb) {
         environment: Environment.SYSTEM,
       };
 
-      const existingByName = existingDrops.find((drop) => drop.name === definition.name);
+      const matching = existingDrops.filter((drop) => drop.name === definition.name);
+      const existingByName = matching[0];
       if (existingByName) {
         await db.drop.update({ where: { id: existingByName.id }, data });
+        canonicalByName.set(definition.name, existingByName.id);
         continue;
       }
 
@@ -90,10 +93,30 @@ async function syncCatalog(db: CatalogDb) {
       if (reusableDrop) {
         reusableById.delete(reusableDrop.id);
         await db.drop.update({ where: { id: reusableDrop.id }, data });
+        canonicalByName.set(definition.name, reusableDrop.id);
         continue;
       }
 
-      await db.drop.create({ data: { ...data, caseId: currentCase.id } });
+      const created = await db.drop.create({ data: { ...data, caseId: currentCase.id } });
+      canonicalByName.set(definition.name, created.id);
+    }
+
+    // Older seeds created several Drop rows with the same skin name. Keep exactly
+    // one canonical row per system skin and move any inventory references to it.
+    for (const definition of definitions) {
+      const canonicalId = canonicalByName.get(definition.name);
+      if (!canonicalId) continue;
+      const duplicates = await db.drop.findMany({
+        where: { caseId: currentCase.id, name: definition.name, id: { not: canonicalId } },
+        select: { id: true },
+      });
+      for (const duplicate of duplicates) {
+        await db.inventoryItem.updateMany({
+          where: { itemId: duplicate.id },
+          data: { itemId: canonicalId, name: definition.name, rarity: definition.rarity, image: definition.image, price: definition.price },
+        });
+        await db.drop.delete({ where: { id: duplicate.id } });
+      }
     }
 
     const finalDrops = await db.drop.findMany({ where: { caseId: currentCase.id }, orderBy: { createdAt: "asc" } });
