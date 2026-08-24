@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { requirePermission, writeAuditLog } from "@/lib/rbac";
 import { validateCasePrice, validateChances, validateDropPrice, validateRarity } from "@/lib/economy-guard";
 
