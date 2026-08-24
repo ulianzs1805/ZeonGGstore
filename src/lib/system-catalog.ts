@@ -1,7 +1,6 @@
 import { Environment, Prisma, PrismaClient } from "@prisma/client";
 
 // Prices are explicit item/catalog prices. Never derive a skin price from its case price.
-// The upgrader must only compare real catalog values.
 export const SYSTEM_DROPS = [
   { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 220 },
   { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 150 },
@@ -27,7 +26,7 @@ export const FURIOUS_DROPS = [
   { name: "Karambit \"Claw\"", rarity: "ARCANE", image: "/skins/furious/karambit-claw.png", probability: 3, price: 13680 },
 ] as const;
 
-// Source of truth: Alex's Fable spreadsheet. M4 Samurai exists only here.
+// Source of truth for Fable images/probabilities. NPN1_DEV-controlled prices are not overwritten by catalog sync.
 export const FABLE_DROPS = [
   { name: "M110 Cyber", rarity: "RARE", image: "/skins/fable/M110 Cyber.png", probability: 8, price: 1 },
   { name: "F/S Tactical", rarity: "RARE", image: "/skins/fable/F:s Tactical.png", probability: 8, price: 0.9 },
@@ -48,26 +47,17 @@ export const FABLE_DROPS = [
 ] as const;
 
 export const PROTECTED_COLLECTION_SLUGS = new Set(["furious", "fable"]);
-
-export function isProtectedCollection(slug: string) {
-  return PROTECTED_COLLECTION_SLUGS.has(slug);
-}
+export function isProtectedCollection(slug: string) { return PROTECTED_COLLECTION_SLUGS.has(slug); }
 
 const LEGACY_FURIOUS_DROP_NAMES = ["AKR Necromancer", "G22 Monster", "M4 Samurai", "AWM Winter Sport"] as const;
-
 let syncPromise: Promise<void> | null = null;
 
 export function ensureSystemCatalog(prisma: PrismaClient) {
   syncPromise ??= (async () => {
-    // Do not hold a long interactive transaction on serverless requests.
-    // The catalog sync touches many rows and must never block case loading.
     await ensureFableCase(prisma);
     await syncCatalog(prisma);
     await enforceFableExclusiveM4(prisma);
-  })().catch((error) => {
-    syncPromise = null;
-    throw error;
-  });
+  })().catch((error) => { syncPromise = null; throw error; });
   return syncPromise;
 }
 
@@ -76,27 +66,9 @@ type CatalogDb = PrismaClient | Prisma.TransactionClient;
 async function ensureFableCase(db: CatalogDb) {
   const existing = await db.case.findUnique({ where: { slug: "fable" } });
   if (existing) return;
-
-  const owner = await db.case.findFirst({
-    where: { environment: Environment.SYSTEM },
-    select: { createdById: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const owner = await db.case.findFirst({ where: { environment: Environment.SYSTEM }, select: { createdById: true }, orderBy: { createdAt: "asc" } });
   if (!owner) return;
-
-  await db.case.create({
-    data: {
-      slug: "fable",
-      name: "Fable",
-      description: "Fable collection",
-      image: "/cases/fable.png",
-      price: 100,
-      environment: Environment.SYSTEM,
-      probabilityMode: "MANUAL",
-      isActive: true,
-      createdById: owner.createdById,
-    },
-  });
+  await db.case.create({ data: { slug: "fable", name: "Fable", description: "Fable collection", image: "/cases/fable.png", price: 100, environment: Environment.SYSTEM, probabilityMode: "MANUAL", isActive: true, createdById: owner.createdById } });
 }
 
 function definitionsForSlug(slug: string) {
@@ -106,63 +78,35 @@ function definitionsForSlug(slug: string) {
 }
 
 async function syncCatalog(db: CatalogDb) {
-  const cases = await db.case.findMany({
-    where: { environment: Environment.SYSTEM, isActive: true },
-    include: { drops: { orderBy: { createdAt: "asc" } } },
-  });
-
+  const cases = await db.case.findMany({ where: { environment: Environment.SYSTEM, isActive: true }, include: { drops: { orderBy: { createdAt: "asc" } } } });
   for (const currentCase of cases) {
-    if (currentCase.slug === "furious") {
-      await db.drop.deleteMany({
-        where: { caseId: currentCase.id, name: { in: [...LEGACY_FURIOUS_DROP_NAMES] } },
-      });
-    }
-
-    const targetProbabilityMode = isProtectedCollection(currentCase.slug) ? "MANUAL" : "DYNAMIC";
-    if (currentCase.probabilityMode !== targetProbabilityMode) {
-      await db.case.update({ where: { id: currentCase.id }, data: { probabilityMode: targetProbabilityMode } });
-    }
-
-    const definitions = definitionsForSlug(currentCase.slug);
+    if (currentCase.slug === "furious") await db.drop.deleteMany({ where: { caseId: currentCase.id, name: { in: [...LEGACY_FURIOUS_DROP_NAMES] } } });
     const protectedCollection = isProtectedCollection(currentCase.slug);
-    // Fable and Furious are canonical collections: their explicit catalog prices are always restored here.
-    if (protectedCollection) {
-      // no-op marker for the invariant; updates below always use definition.price
-    }
-
+    const targetProbabilityMode = protectedCollection ? "MANUAL" : "DYNAMIC";
+    if (currentCase.probabilityMode !== targetProbabilityMode) await db.case.update({ where: { id: currentCase.id }, data: { probabilityMode: targetProbabilityMode } });
+    const definitions = definitionsForSlug(currentCase.slug);
     const existingDrops = await db.drop.findMany({ where: { caseId: currentCase.id }, orderBy: { createdAt: "asc" } });
-    const unmatched = existingDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name));
-    const matchedCount = existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length;
-    const reusable = unmatched.slice(0, Math.max(0, definitions.length - matchedCount));
-    const reusableById = new Set(reusable.map((drop) => drop.id));
+    const reusable = existingDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name));
+    const reusableIds = new Set(reusable.map((drop) => drop.id));
     const canonicalByName = new Map<string, string>();
 
     for (const definition of definitions) {
-      const data = {
-        name: definition.name,
-        rarity: definition.rarity,
-        image: definition.image,
-        probability: definition.probability,
-        price: definition.price,
-        environment: Environment.SYSTEM,
-      };
-
-      const matching = existingDrops.filter((drop) => drop.name === definition.name);
-      const existingByName = matching[0];
+      const existingByName = existingDrops.find((drop) => drop.name === definition.name);
+      // Protected collections keep the stored price: NPN1_DEV may change it through the admin API.
+      const price = protectedCollection && existingByName ? existingByName.price : definition.price;
+      const data = { name: definition.name, rarity: definition.rarity, image: definition.image, probability: definition.probability, price, environment: Environment.SYSTEM };
       if (existingByName) {
         await db.drop.update({ where: { id: existingByName.id }, data });
         canonicalByName.set(definition.name, existingByName.id);
         continue;
       }
-
-      const reusableDrop = reusable.find((drop) => reusableById.has(drop.id));
+      const reusableDrop = reusable.find((drop) => reusableIds.has(drop.id));
       if (reusableDrop) {
-        reusableById.delete(reusableDrop.id);
+        reusableIds.delete(reusableDrop.id);
         await db.drop.update({ where: { id: reusableDrop.id }, data });
         canonicalByName.set(definition.name, reusableDrop.id);
         continue;
       }
-
       const created = await db.drop.create({ data: { ...data, caseId: currentCase.id } });
       canonicalByName.set(definition.name, created.id);
     }
@@ -170,15 +114,11 @@ async function syncCatalog(db: CatalogDb) {
     for (const definition of definitions) {
       const canonicalId = canonicalByName.get(definition.name);
       if (!canonicalId) continue;
-      const duplicates = await db.drop.findMany({
-        where: { caseId: currentCase.id, name: definition.name, id: { not: canonicalId } },
-        select: { id: true },
-      });
+      const duplicates = await db.drop.findMany({ where: { caseId: currentCase.id, name: definition.name, id: { not: canonicalId } }, select: { id: true } });
       for (const duplicate of duplicates) {
-        await db.inventoryItem.updateMany({
-          where: { itemId: duplicate.id },
-          data: { itemId: canonicalId, name: definition.name, rarity: definition.rarity, image: definition.image, price: definition.price },
-        });
+        const canonical = definitions.find((item) => item.name === definition.name)!;
+        const storedCanonical = await db.drop.findUnique({ where: { id: canonicalId }, select: { price: true } });
+        await db.inventoryItem.updateMany({ where: { itemId: duplicate.id }, data: { itemId: canonicalId, name: canonical.name, rarity: canonical.rarity, image: canonical.image, price: storedCanonical?.price ?? canonical.price } });
         await db.drop.delete({ where: { id: duplicate.id } });
       }
     }
@@ -194,24 +134,9 @@ async function enforceFableExclusiveM4(db: CatalogDb) {
   if (!fable) return;
   const canonical = fable.drops.find((drop) => drop.name === "M4 Samurai");
   if (!canonical) return;
-
-  const foreign = await db.drop.findMany({
-    where: { name: "M4 Samurai", caseId: { not: canonical.caseId } },
-    select: { id: true },
-  });
-
+  const foreign = await db.drop.findMany({ where: { name: "M4 Samurai", caseId: { not: canonical.caseId } }, select: { id: true } });
   for (const duplicate of foreign) {
-    await db.inventoryItem.updateMany({
-      where: { itemId: duplicate.id },
-      data: {
-        itemId: canonical.id,
-        name: canonical.name,
-        rarity: canonical.rarity,
-        image: canonical.image,
-        price: canonical.price,
-        caseId: fable.id,
-      },
-    });
+    await db.inventoryItem.updateMany({ where: { itemId: duplicate.id }, data: { itemId: canonical.id, name: canonical.name, rarity: canonical.rarity, image: canonical.image, price: canonical.price, caseId: fable.id } });
     await db.drop.delete({ where: { id: duplicate.id } });
   }
 }
