@@ -33,11 +33,13 @@ const cases = [
 	},
 ] as const;
 
+// Prices are item/catalog prices. They must never be calculated from the case price.
+// The upgrader uses these exact values when deciding which targets are actually more expensive.
 const drops = [
-	{ name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, priceMultiplier: 2 },
-	{ name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, priceMultiplier: 4 },
-	{ name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, priceMultiplier: 7 },
-	{ name: "M4 Samurai", rarity: "ARCANE", image: "/skins/m4-samurai.png", probability: 10, priceMultiplier: 10 },
+	{ name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 220 },
+	{ name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 160 },
+	{ name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 7000 },
+	{ name: "M4 Samurai", rarity: "ARCANE", image: "/skins/m4-samurai.png", probability: 10, price: 120 },
 ] as const;
 
 const furiousDrops = [
@@ -88,13 +90,13 @@ async function main() {
 				environment: Environment.SYSTEM,
 				probabilityMode: "DYNAMIC",
 				createdById: dev.id,
-					drops: { create: caseDrops.map((drop) => ({ name: drop.name, rarity: drop.rarity, image: drop.image, price: "price" in drop ? drop.price : item.price * drop.priceMultiplier, probability: drop.probability, environment: Environment.SYSTEM })) },
+				drops: { create: caseDrops.map((drop) => ({ name: drop.name, rarity: drop.rarity, image: drop.image, price: drop.price, probability: drop.probability, environment: Environment.SYSTEM })) },
 			},
 		});
 
 		for (const [index, drop] of caseDrops.entries()) {
 			const currentDrop = existingDrops?.[index];
-			const data = { name: drop.name, rarity: drop.rarity, image: drop.image, price: "price" in drop ? drop.price : item.price * drop.priceMultiplier, probability: drop.probability, environment: Environment.SYSTEM };
+			const data = { name: drop.name, rarity: drop.rarity, image: drop.image, price: drop.price, probability: drop.probability, environment: Environment.SYSTEM };
 			if (currentDrop) await prisma.drop.update({ where: { id: currentDrop.id }, data });
 			else await prisma.drop.create({ data: { ...data, caseId: currentCase.id } });
 		}
