@@ -6,7 +6,6 @@ export const SYSTEM_DROPS = [
   { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 220 },
   { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 150 },
   { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 7000 },
-  { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/m4-samurai.png", probability: 10, price: 120 },
 ] as const;
 
 export const FURIOUS_DROPS = [
@@ -28,6 +27,26 @@ export const FURIOUS_DROPS = [
   { name: "Karambit \"Claw\"", rarity: "ARCANE", image: "/skins/furious/karambit-claw.png", probability: 3, price: 13680 },
 ] as const;
 
+// Source of truth: Alex's Fable spreadsheet. M4 Samurai exists only here.
+export const FABLE_DROPS = [
+  { name: "M110 Cyber", rarity: "RARE", image: "/skins/fable/m110-cyber.png", probability: 8, price: 1 },
+  { name: "F/S Tactical", rarity: "RARE", image: "/skins/fable/fs-tactical.png", probability: 8, price: 0.9 },
+  { name: "Desert Eagle Ace", rarity: "RARE", image: "/skins/fable/desert-eagle-ace.png", probability: 8, price: 1.17 },
+  { name: "G22 Starfall", rarity: "RARE", image: "/skins/fable/g22-starfall.png", probability: 8, price: 1.09 },
+  { name: "FNFL Tactical", rarity: "RARE", image: "/skins/fable/fnfl-tactical.png", probability: 8, price: 4.55 },
+  { name: "UMP45 Cerberus", rarity: "RARE", image: "/skins/fable/ump45-cerberus.png", probability: 8, price: 4.8 },
+  { name: "USP Pisces", rarity: "EPIC", image: "/skins/fable/usp-pisces.png", probability: 7, price: 4.84 },
+  { name: "MP7 Lich", rarity: "EPIC", image: "/skins/fable/mp7-lich.png", probability: 7, price: 31.49 },
+  { name: "M4 Lizard", rarity: "EPIC", image: "/skins/fable/m4-lizard.png", probability: 7, price: 32 },
+  { name: "Tec-9 Fable", rarity: "EPIC", image: "/skins/fable/tec9-fable.png", probability: 7, price: 32 },
+  { name: "F/S Venom", rarity: "LEGENDARY", image: "/skins/fable/fs-venom.png", probability: 6, price: 161 },
+  { name: "M4 Samurai", rarity: "LEGENDARY", image: "/skins/fable/m4-samurai.png", probability: 6, price: 168 },
+  { name: "Butterfly Starfall", rarity: "ARCANE", image: "/skins/fable/butterfly-starfall.png", probability: 3, price: 2000 },
+  { name: "Butterfly Black Window", rarity: "ARCANE", image: "/skins/fable/butterfly-black-window.png", probability: 3, price: 2175 },
+  { name: "Butterfly Legacy", rarity: "ARCANE", image: "/skins/fable/butterfly-legacy.png", probability: 3, price: 2450 },
+  { name: "Butterfly Dragon Glass", rarity: "ARCANE", image: "/skins/fable/butterfly-dragon-glass.png", probability: 3, price: 2498 },
+] as const;
+
 const LEGACY_FURIOUS_DROP_NAMES = ["AKR Necromancer", "G22 Monster", "M4 Samurai", "AWM Winter Sport"] as const;
 
 let syncPromise: Promise<void> | null = null;
@@ -35,7 +54,9 @@ let syncPromise: Promise<void> | null = null;
 export function ensureSystemCatalog(prisma: PrismaClient) {
   syncPromise ??= prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(91736421)`;
+    await ensureFableCase(tx);
     await syncCatalog(tx);
+    await enforceFableExclusiveM4(tx);
   }).catch((error) => {
     syncPromise = null;
     throw error;
@@ -44,6 +65,38 @@ export function ensureSystemCatalog(prisma: PrismaClient) {
 }
 
 type CatalogDb = PrismaClient | Prisma.TransactionClient;
+
+async function ensureFableCase(db: CatalogDb) {
+  const existing = await db.case.findUnique({ where: { slug: "fable" } });
+  if (existing) return;
+
+  const owner = await db.case.findFirst({
+    where: { environment: Environment.SYSTEM },
+    select: { createdById: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!owner) return;
+
+  await db.case.create({
+    data: {
+      slug: "fable",
+      name: "Fable",
+      description: "Fable collection",
+      image: "/cases/fable.png",
+      price: 100,
+      environment: Environment.SYSTEM,
+      probabilityMode: "MANUAL",
+      isActive: true,
+      createdById: owner.createdById,
+    },
+  });
+}
+
+function definitionsForSlug(slug: string) {
+  if (slug === "furious") return FURIOUS_DROPS;
+  if (slug === "fable") return FABLE_DROPS;
+  return SYSTEM_DROPS;
+}
 
 async function syncCatalog(db: CatalogDb) {
   const cases = await db.case.findMany({
@@ -58,12 +111,12 @@ async function syncCatalog(db: CatalogDb) {
       });
     }
 
-    const targetProbabilityMode = currentCase.slug === "furious" ? "MANUAL" : "DYNAMIC";
+    const targetProbabilityMode = ["furious", "fable"].includes(currentCase.slug) ? "MANUAL" : "DYNAMIC";
     if (currentCase.probabilityMode !== targetProbabilityMode) {
       await db.case.update({ where: { id: currentCase.id }, data: { probabilityMode: targetProbabilityMode } });
     }
 
-    const definitions = currentCase.slug === "furious" ? FURIOUS_DROPS : SYSTEM_DROPS;
+    const definitions = definitionsForSlug(currentCase.slug);
     const existingDrops = await db.drop.findMany({ where: { caseId: currentCase.id }, orderBy: { createdAt: "asc" } });
     const unmatched = existingDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name));
     const matchedCount = existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length;
@@ -101,8 +154,6 @@ async function syncCatalog(db: CatalogDb) {
       canonicalByName.set(definition.name, created.id);
     }
 
-    // Older seeds created several Drop rows with the same skin name. Keep exactly
-    // one canonical row per system skin and move any inventory references to it.
     for (const definition of definitions) {
       const canonicalId = canonicalByName.get(definition.name);
       if (!canonicalId) continue;
@@ -122,5 +173,31 @@ async function syncCatalog(db: CatalogDb) {
     const finalDrops = await db.drop.findMany({ where: { caseId: currentCase.id }, orderBy: { createdAt: "asc" } });
     const idsToDelete = finalDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name)).map((drop) => drop.id);
     if (idsToDelete.length) await db.drop.deleteMany({ where: { caseId: currentCase.id, id: { in: idsToDelete } } });
+  }
+}
+
+async function enforceFableExclusiveM4(db: CatalogDb) {
+  const fable = await db.case.findUnique({ where: { slug: "fable" }, include: { drops: true } });
+  const canonical = fable?.drops.find((drop) => drop.name === "M4 Samurai");
+  if (!canonical) return;
+
+  const foreign = await db.drop.findMany({
+    where: { name: "M4 Samurai", caseId: { not: canonical.caseId } },
+    select: { id: true },
+  });
+
+  for (const duplicate of foreign) {
+    await db.inventoryItem.updateMany({
+      where: { itemId: duplicate.id },
+      data: {
+        itemId: canonical.id,
+        name: canonical.name,
+        rarity: canonical.rarity,
+        image: canonical.image,
+        price: canonical.price,
+        caseId: fable.id,
+      },
+    });
+    await db.drop.delete({ where: { id: duplicate.id } });
   }
 }
