@@ -36,7 +36,7 @@ export default function AdminPanel({ role, email, staffId }: { role: Role; email
     if (section === "zcoin") return isDev ? <ZCoinPanel /> : null;
     if (section === "console") return isDev ? <DevConsolePanel /> : null;
     if (section === "force") return isNpn ? <ForceDropPanel /> : null;
-    if (section === "skinPrices") return isDev ? <SkinPricePanel /> : null;
+    if (section === "skinPrices") return isDev ? <SkinPricePanel role={role} /> : null;
     return null;
   };
   return <div className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
