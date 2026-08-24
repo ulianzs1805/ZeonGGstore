@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 const navItems = [
   { label: "Кейсы", href: "/#cases" },
+  { label: "Апгрейд", href: "/upgrade" },
   { label: "Бонусы", href: "/bonuses" },
   { label: "Профиль", href: "/account" },
 ];
@@ -109,47 +110,19 @@ export default function Header() {
                 {notificationOpen && <div className="absolute right-0 top-12 z-50 w-[min(88vw,360px)] rounded-2xl border border-violet-300/20 bg-[#0a0f18]/95 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl"><div className="mb-2 flex items-center justify-between"><p className="text-sm font-black text-white">Уведомления</p><button type="button" onClick={() => setNotificationOpen(false)} className="text-xs text-slate-500 hover:text-white">Закрыть</button></div>{notifications.length ? <div className="max-h-80 space-y-2 overflow-y-auto">{notifications.map((item) => <article key={item.id} className={`rounded-xl border p-3 ${item.readAt ? "border-white/10 bg-white/[0.02]" : "border-violet-300/30 bg-violet-400/10"}`}><p className="text-sm font-bold text-white">{item.title}</p><p className="mt-1 text-xs leading-5 text-slate-300">{item.body}</p><p className="mt-2 text-[0.65rem] text-slate-500">{new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.createdAt))}</p></article>)}</div> : <p className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">Новых уведомлений нет.</p>}<div className="mt-3 flex justify-end border-t border-white/10 pt-3"><button type="button" onClick={() => void clearNotifications()} className="text-xs font-bold text-violet-200 transition hover:text-white">Очистить ящик</button></div></div>}
               </div>
               <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((open) => !open)}
-                className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-violet-400/50 bg-gradient-to-br from-violet-500/30 to-slate-900/90 shadow-[0_0_22px_rgba(168,85,247,0.35)] transition hover:scale-[1.03]"
-                aria-label="Открыть профиль"
-              >
-                {session.user?.image ? (
-                  <Image
-                    src={session.user.image}
-                    alt="Аватар"
-                    width={44}
-                    height={44}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="text-xs font-bold text-violet-100">
-                    {(session.user?.name || "U").charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </button>
-              {menuOpen && <div className="absolute right-0 top-14 z-50 w-56 rounded-2xl border border-violet-300/20 bg-[#0a0f18]/95 p-2 shadow-[0_18px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                {[['Профиль', '/account'], ['Инвентарь', '/account/inventory'], ['История транзакций', '/account/operations'], ['Настройки', '/account/settings']].map(([label, href]) => <Link key={href} href={href} onClick={() => setMenuOpen(false)} className="block rounded-xl px-3 py-2.5 text-sm text-slate-200 hover:bg-violet-400/10">{label}</Link>)}
-                {role !== "USER" && <Link href="/admin" onClick={() => setMenuOpen(false)} className="block rounded-xl px-3 py-2.5 text-sm font-bold text-violet-200 hover:bg-violet-400/10">{roleBadge(role)}</Link>}
-                <button type="button" onClick={() => signOut({ callbackUrl: "/" })} className="mt-1 block w-full rounded-xl border-t border-white/10 px-3 py-2.5 text-left text-sm text-red-200 hover:bg-red-400/10">Выйти</button>
-              </div>}
+                <button type="button" onClick={() => setMenuOpen((open) => !open)} className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-violet-400/50 bg-gradient-to-br from-violet-500/30 to-slate-900/90 shadow-[0_0_22px_rgba(168,85,247,0.35)] transition hover:scale-[1.03]" aria-label="Открыть профиль">
+                  {session.user?.image ? <Image src={session.user.image} alt="Аватар" width={44} height={44} className="h-full w-full object-cover" /> : <span className="text-xs font-bold text-violet-100">{(session.user?.name || "U").charAt(0).toUpperCase()}</span>}
+                </button>
+                {menuOpen && <div className="absolute right-0 top-14 z-50 w-56 rounded-2xl border border-violet-300/20 bg-[#0a0f18]/95 p-2 shadow-[0_18px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                  {[['Профиль', '/account'], ['Инвентарь', '/account/inventory'], ['Апгрейд', '/upgrade'], ['История транзакций', '/account/operations'], ['Настройки', '/account/settings']].map(([label, href]) => <Link key={href} href={href} onClick={() => setMenuOpen(false)} className="block rounded-xl px-3 py-2.5 text-sm text-slate-200 hover:bg-violet-400/10">{label}</Link>)}
+                  {role !== "USER" && <Link href="/admin" onClick={() => setMenuOpen(false)} className="block rounded-xl px-3 py-2.5 text-sm font-bold text-violet-200 hover:bg-violet-400/10">{roleBadge(role)}</Link>}
+                  <button type="button" onClick={() => signOut({ callbackUrl: "/" })} className="mt-1 block w-full rounded-xl border-t border-white/10 px-3 py-2.5 text-left text-sm text-red-200 hover:bg-red-400/10">Выйти</button>
+                </div>}
               </div>
-
-              <button
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="hidden rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-red-400/30 hover:text-white sm:inline-flex"
-              >
-                Выйти
-              </button>
+              <button onClick={() => signOut({ callbackUrl: "/" })} className="hidden rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-red-400/30 hover:text-white sm:inline-flex">Выйти</button>
             </div>
           ) : (
-            <button
-              onClick={() => signIn("google", { callbackUrl: "/" })}
-              className="rounded-xl border border-violet-500/40 bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-white shadow-[0_0_22px_rgba(168,85,247,0.4)] transition hover:brightness-110"
-            >
-              Войти
-            </button>
+            <button onClick={() => signIn("google", { callbackUrl: "/" })} className="rounded-xl border border-violet-500/40 bg-gradient-to-r from-violet-500 to-fuchsia-500 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-white shadow-[0_0_22px_rgba(168,85,247,0.4)] transition hover:brightness-110">Войти</button>
           )}
         </div>
       </div>
