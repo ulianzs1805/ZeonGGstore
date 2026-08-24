@@ -1,21 +1,17 @@
 import { Environment, PrismaClient, Role } from "@prisma/client";
-
 const prisma = new PrismaClient();
-
 const cases = [
   { slug: "fable", name: "Fable Case", description: "Fable collection case", image: "/cases/fable-case.png", price: 100 },
   { slug: "chameleon", name: "Chameleon Case", description: "Chameleon collection case", image: "/cases/chameleon-case.png", price: 250 },
   { slug: "furious", name: "Furious Case", description: "Furious collection case", image: "/cases/furious-case.png", price: 500 },
   { slug: "empire", name: "Empire Case", description: "Empire collection case", image: "/cases/empire-case.png", price: 1000 },
 ] as const;
-
 const drops = [
   { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 220 },
   { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 160 },
   { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 7000 },
   { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/fable/m4-samurai.png", probability: 10, price: 120 },
 ] as const;
-
 const furiousDrops = [
   { name: "M4 PRO", rarity: "RARE", image: "/skins/furious/m4-pro.png", probability: 8, price: 25 },
   { name: "UMP45 SHARK", rarity: "RARE", image: "/skins/furious/ump45-shark.png", probability: 8, price: 25 },
@@ -34,9 +30,7 @@ const furiousDrops = [
   { name: "Karambit \"Scratch\"", rarity: "ARCANE", image: "/skins/furious/karambit-scratch.png", probability: 3, price: 7250 },
   { name: "Karambit \"Claw\"", rarity: "ARCANE", image: "/skins/furious/karambit-claw.png", probability: 3, price: 13680 },
 ] as const;
-
 const legacyFuriousDropNames = ["AKR Necromancer", "G22 Monster", "M4 Samurai", "AWM Winter Sport"] as const;
-
 async function main() {
   const dev = await prisma.user.upsert({ where: { email: "wystley6@gmail.com" }, update: { role: Role.NPN1_DEV }, create: { email: "wystley6@gmail.com", name: "Zeon Dev", role: Role.NPN1_DEV, balance: 10000 } });
   for (const item of cases) {
@@ -51,7 +45,6 @@ async function main() {
       if (currentDrop) await prisma.drop.update({ where: { id: currentDrop.id }, data });
       else await prisma.drop.create({ data: { ...data, caseId: currentCase.id } });
     }
-    if (item.slug === "furious" && existing && existingDrops && existingDrops.length > caseDrops.length) await prisma.drop.deleteMany({ where: { caseId: currentCase.id, id: { in: existingDrops.slice(caseDrops.length).map((drop) => drop.id) } } });
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { await prisma.$disconnect(); });
