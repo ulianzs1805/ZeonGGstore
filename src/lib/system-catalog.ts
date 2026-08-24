@@ -5,6 +5,7 @@ export const SYSTEM_DROPS = [
   { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 150 },
   { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 7000 },
 ] as const;
+
 export const FURIOUS_DROPS = [
   { name: "M4 PRO", rarity: "RARE", image: "/skins/furious/m4-pro.png", probability: 8, price: 25 },
   { name: "UMP45 SHARK", rarity: "RARE", image: "/skins/furious/ump45-shark.png", probability: 8, price: 25 },
@@ -23,23 +24,24 @@ export const FURIOUS_DROPS = [
   { name: "Karambit \"Scratch\"", rarity: "ARCANE", image: "/skins/furious/karambit-scratch.png", probability: 3, price: 7250 },
   { name: "Karambit \"Claw\"", rarity: "ARCANE", image: "/skins/furious/karambit-claw.png", probability: 3, price: 13680 },
 ] as const;
+
 export const FABLE_DROPS = [
-  { name: "M110 Cyber", rarity: "RARE", image: "/skins/fable/M110 Cyber.png", probability: 8, price: 1 },
-  { name: "F/S Tactical", rarity: "RARE", image: "/skins/fable/F:s Tactical.png", probability: 8, price: 0.9 },
-  { name: "Desert Eagle Ace", rarity: "RARE", image: "/skins/fable/Desert eagle ,,Ace”.png", probability: 8, price: 1.17 },
-  { name: "G22 Starfall", rarity: "RARE", image: "/skins/fable/G22 Starfall.png", probability: 8, price: 1.09 },
-  { name: "FNFL Tactical", rarity: "EPIC", image: "/skins/fable/FNFL Tactical.png", probability: 8, price: 4.55 },
-  { name: "UMP45 Cerberus", rarity: "EPIC", image: "/skins/fable/UMP Cerberus .png", probability: 8, price: 4.8 },
-  { name: "USP Pisces", rarity: "EPIC", image: "/skins/fable/Usp Pisces .png", probability: 7, price: 4.84 },
-  { name: "MP7 Lich", rarity: "LEGENDARY", image: "/skins/fable/MP7 Lich.png", probability: 7, price: 31.49 },
-  { name: "M4 Lizard", rarity: "LEGENDARY", image: "/skins/fable/m4 Lizard.png", probability: 7, price: 32 },
-  { name: "Tec-9 Fable", rarity: "LEGENDARY", image: "/skins/fable/TEC9 ,,Fable”.png", probability: 7, price: 32 },
-  { name: "F/S Venom", rarity: "ARCANE", image: "/skins/fable/F:s Venom.png", probability: 6, price: 161 },
+  { name: "M110 Cyber", rarity: "RARE", image: "/skins/fable/m110-cyber.png", probability: 8, price: 1 },
+  { name: "F/S Tactical", rarity: "RARE", image: "/skins/fable/fs-tactical.png", probability: 8, price: 0.9 },
+  { name: "Desert Eagle Ace", rarity: "RARE", image: "/skins/fable/desert-eagle-ace.png", probability: 8, price: 1.17 },
+  { name: "G22 Starfall", rarity: "RARE", image: "/skins/fable/g22-starfall.png", probability: 8, price: 1.09 },
+  { name: "FNFL Tactical", rarity: "EPIC", image: "/skins/fable/fnfl-tactical.png", probability: 8, price: 4.55 },
+  { name: "UMP45 Cerberus", rarity: "EPIC", image: "/skins/fable/ump45-cerberus.png", probability: 8, price: 4.8 },
+  { name: "USP Pisces", rarity: "EPIC", image: "/skins/fable/usp-pisces.png", probability: 7, price: 4.84 },
+  { name: "MP7 Lich", rarity: "LEGENDARY", image: "/skins/fable/mp7-lich.png", probability: 7, price: 31.49 },
+  { name: "M4 Lizard", rarity: "LEGENDARY", image: "/skins/fable/m4-lizard.png", probability: 7, price: 32 },
+  { name: "Tec-9 Fable", rarity: "LEGENDARY", image: "/skins/fable/tec9-fable.png", probability: 7, price: 32 },
+  { name: "F/S Venom", rarity: "ARCANE", image: "/skins/fable/fs-venom.png", probability: 6, price: 161 },
   { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/fable/m4-samurai.png", probability: 6, price: 168 },
-  { name: "Butterfly Starfall", rarity: "ARCANE", image: "/skins/fable/Butterfly Starfall .png", probability: 3, price: 2000 },
-  { name: "Butterfly Black Window", rarity: "ARCANE", image: "/skins/fable/Butterfly Black Window.png", probability: 3, price: 2175 },
-  { name: "Butterfly Legacy", rarity: "ARCANE", image: "/skins/fable/Butterfly Legacy.png", probability: 3, price: 2450 },
-  { name: "Butterfly Dragon Glass", rarity: "ARCANE", image: "/skins/fable/Butterfly Dragon glass.png", probability: 3, price: 2498 },
+  { name: "Butterfly Starfall", rarity: "ARCANE", image: "/skins/fable/butterfly-starfall.png", probability: 3, price: 2000 },
+  { name: "Butterfly Black Window", rarity: "ARCANE", image: "/skins/fable/butterfly-black-window.png", probability: 3, price: 2175 },
+  { name: "Butterfly Legacy", rarity: "ARCANE", image: "/skins/fable/butterfly-legacy.png", probability: 3, price: 2450 },
+  { name: "Butterfly Dragon Glass", rarity: "ARCANE", image: "/skins/fable/butterfly-dragon-glass.png", probability: 3, price: 2498 },
 ] as const;
 
 export const PROTECTED_COLLECTION_SLUGS = new Set(["furious", "fable"]);
