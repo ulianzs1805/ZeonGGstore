@@ -40,7 +40,7 @@ export const FABLE_DROPS = [
   { name: "M4 Lizard", rarity: "EPIC", image: "/skins/fable/m4-lizard.png", probability: 7, price: 32 },
   { name: "Tec-9 Fable", rarity: "EPIC", image: "/skins/fable/tec9-fable.png", probability: 7, price: 32 },
   { name: "F/S Venom", rarity: "LEGENDARY", image: "/skins/fable/fs-venom.png", probability: 6, price: 161 },
-  { name: "M4 Samurai", rarity: "LEGENDARY", image: "/skins/m4-samurai.png", probability: 6, price: 168 },
+  { name: "M4 Samurai", rarity: "LEGENDARY", image: "/skins/fable/m4-samurai.png", probability: 6, price: 168 },
   { name: "Butterfly Starfall", rarity: "ARCANE", image: "/skins/fable/butterfly-starfall.png", probability: 3, price: 2000 },
   { name: "Butterfly Black Window", rarity: "ARCANE", image: "/skins/fable/butterfly-black-window.png", probability: 3, price: 2175 },
   { name: "Butterfly Legacy", rarity: "ARCANE", image: "/skins/fable/butterfly-legacy.png", probability: 3, price: 2450 },
