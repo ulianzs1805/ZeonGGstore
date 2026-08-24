@@ -32,9 +32,9 @@ let syncPromise: Promise<void> | null = null;
 
 export function ensureSystemCatalog(prisma: PrismaClient) {
   syncPromise ??= prisma.$transaction(async (tx) => {
-    // Serialize catalog synchronization across concurrent Vercel/serverless instances.
-    // The lock is transaction-scoped and is released automatically on commit/rollback.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(91736421)`;
+    // pg_advisory_xact_lock returns PostgreSQL's `void` type. Prisma cannot
+    // deserialize that through $queryRaw, so execute it as a command instead.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(91736421)`;
     await syncCatalog(tx);
   }).catch((error) => {
     syncPromise = null;
