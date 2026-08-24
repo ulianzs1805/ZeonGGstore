@@ -1,10 +1,9 @@
 import { Environment, Prisma, PrismaClient } from "@prisma/client";
 
-// Prices here are actual catalog prices used by the upgrader. Never derive an
-// item's market value from the case price: a cheap skin must stay cheap and
-// simply be excluded when the selected input is more expensive.
+// Prices are explicit item/catalog prices. Never derive a skin price from its case price.
+// The upgrader must only compare real catalog values.
 export const SYSTEM_DROPS = [
-  { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 95 },
+  { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 220 },
   { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 150 },
   { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 7000 },
   { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/m4-samurai.png", probability: 10, price: 120 },
@@ -77,7 +76,6 @@ async function syncCatalog(db: CatalogDb) {
         rarity: definition.rarity,
         image: definition.image,
         probability: definition.probability,
-        // Explicit catalog price only. No case-price multiplier is allowed.
         price: definition.price,
         environment: Environment.SYSTEM,
       };
