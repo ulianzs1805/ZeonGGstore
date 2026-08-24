@@ -37,8 +37,7 @@ export async function GET() {
     }),
   ]);
 
-  const uniqueTargets = Array.from(new Map(drops.map((drop) => [drop.id, drop])).values());
-  return NextResponse.json({ inventory, targets: uniqueTargets });
+  return NextResponse.json({ inventory, targets: drops });
 }
 
 export async function POST(request: Request) {
@@ -56,92 +55,94 @@ export async function POST(request: Request) {
   if (new Set(itemIds).size !== itemIds.length) return NextResponse.json({ error: "DUPLICATE_ITEMS" }, { status: 400 });
   if (!targetId) return NextResponse.json({ error: "TARGET_REQUIRED" }, { status: 400 });
 
-  const previous = await prisma.operation.findUnique({
-    where: { idempotencyKey },
-    include: { item: true },
-  });
+  const previous = await prisma.operation.findUnique({ where: { idempotencyKey } });
   if (previous) {
+    const reward = previous.status === "SUCCESS"
+      ? await prisma.operation.findUnique({ where: { idempotencyKey: `${idempotencyKey}:reward` }, include: { item: true } })
+      : null;
     return NextResponse.json({
       ok: previous.status === "SUCCESS",
       replay: true,
       status: previous.status,
-      resultItem: previous.item ? publicItem(previous.item) : null,
+      resultItem: reward?.item ? publicItem(reward.item) : null,
     });
   }
 
   await ensureSystemCatalog(prisma);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const [items, target] = await Promise.all([
-      tx.inventoryItem.findMany({
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const [items, target] = await Promise.all([
+        tx.inventoryItem.findMany({
+          where: { id: { in: itemIds }, userId: user.id, soldAt: null },
+          select: { id: true, name: true, rarity: true, image: true, price: true },
+        }),
+        tx.drop.findFirst({
+          where: { id: targetId, case: { environment: "SYSTEM", isActive: true } },
+          select: { id: true, name: true, rarity: true, image: true, price: true },
+        }),
+      ]);
+
+      if (items.length !== itemIds.length) throw new Error("ITEMS_NOT_AVAILABLE");
+      if (!target) throw new Error("TARGET_NOT_FOUND");
+
+      const inputValue = items.reduce((sum, item) => sum + item.price, 0);
+      if (inputValue < MIN_TOTAL) throw new Error("MIN_TOTAL");
+
+      const chance = chanceFor(inputValue, target.price);
+      const roll = randomInt(0, 1_000_000) / 10_000;
+      const success = roll < chance;
+      const now = new Date();
+
+      const consumed = await tx.inventoryItem.updateMany({
         where: { id: { in: itemIds }, userId: user.id, soldAt: null },
-        select: { id: true, name: true, rarity: true, image: true, price: true },
-      }),
-      tx.drop.findFirst({
-        where: { id: targetId, case: { environment: "SYSTEM", isActive: true } },
-        select: { id: true, name: true, rarity: true, image: true, price: true },
-      }),
-    ]);
+        data: { soldAt: now },
+      });
+      if (consumed.count !== itemIds.length) throw new Error("ITEMS_CHANGED");
 
-    if (items.length !== itemIds.length) throw new Error("ITEMS_NOT_AVAILABLE");
-    if (!target) throw new Error("TARGET_NOT_FOUND");
+      await tx.operation.create({
+        data: {
+          userId: user.id,
+          type: success ? "UPGRADE_WIN" : "UPGRADE_LOSS",
+          label: success ? `Апгрейд → ${target.name}` : `Апгрейд → ${target.name} (неудача)`,
+          amount: -inputValue,
+          status: success ? "SUCCESS" : "FAILED",
+          idempotencyKey,
+        },
+      });
 
-    const inputValue = items.reduce((sum, item) => sum + item.price, 0);
-    if (inputValue < MIN_TOTAL) throw new Error("MIN_TOTAL");
+      if (!success) return { success, chance, roll, target: publicItem(target), resultItem: null };
 
-    const chance = chanceFor(inputValue, target.price);
-    const roll = randomInt(0, 1_000_000) / 10_000;
-    const success = roll < chance;
-    const now = new Date();
+      const resultItem = await tx.inventoryItem.create({
+        data: {
+          userId: user.id,
+          itemId: target.id,
+          name: target.name,
+          rarity: target.rarity,
+          image: target.image,
+          price: target.price,
+        },
+      });
 
-    const consumed = await tx.inventoryItem.updateMany({
-      where: { id: { in: itemIds }, userId: user.id, soldAt: null },
-      data: { soldAt: now },
-    });
-    if (consumed.count !== itemIds.length) throw new Error("ITEMS_CHANGED");
+      await tx.operation.create({
+        data: {
+          userId: user.id,
+          type: "UPGRADE_REWARD",
+          itemId: resultItem.id,
+          label: `Получен ${target.name}`,
+          amount: target.price,
+          status: "SUCCESS",
+          idempotencyKey: `${idempotencyKey}:reward`,
+        },
+      });
 
-    await tx.operation.create({
-      data: {
-        userId: user.id,
-        type: success ? "UPGRADE_WIN" : "UPGRADE_LOSS",
-        label: success ? `Апгрейд → ${target.name}` : `Апгрейд → ${target.name} (неудача)`,
-        amount: -inputValue,
-        status: success ? "SUCCESS" : "FAILED",
-        idempotencyKey,
-      },
-    });
-
-    if (!success) return { success, chance, roll, target: publicItem(target), resultItem: null };
-
-    const resultItem = await tx.inventoryItem.create({
-      data: {
-        userId: user.id,
-        itemId: target.id,
-        name: target.name,
-        rarity: target.rarity,
-        image: target.image,
-        price: target.price,
-      },
+      return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem) };
     });
 
-    await tx.operation.create({
-      data: {
-        userId: user.id,
-        type: "UPGRADE_REWARD",
-        itemId: resultItem.id,
-        label: `Получен ${target.name}`,
-        amount: target.price,
-        status: "SUCCESS",
-        idempotencyKey: `${idempotencyKey}:reward`,
-      },
-    });
-
-    return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem) };
-  }).catch((error: unknown) => {
+    return NextResponse.json(result);
+  } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "UPGRADE_FAILED";
     const status = code === "ITEMS_NOT_AVAILABLE" || code === "ITEMS_CHANGED" ? 409 : 400;
-    throw Object.assign(new Error(code), { status });
-  });
-
-  return NextResponse.json(result);
+    return NextResponse.json({ error: code }, { status });
+  }
 }
