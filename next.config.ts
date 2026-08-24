@@ -13,11 +13,20 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/skins/fable/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, must-revalidate",
+          },
+        ],
+      },
+      {
         source: "/skins/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: "public, max-age=86400",
           },
         ],
       },
@@ -26,7 +35,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
+            value: "public, max-age=86400",
           },
         ],
       },
