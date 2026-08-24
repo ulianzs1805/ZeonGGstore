@@ -150,7 +150,7 @@ model Drop {
   name String
   rarity String
   image String
-  price Int
+  price Float
   probability Float
   environment Environment @default(SYSTEM)
   createdAt DateTime @default(now())
@@ -196,7 +196,7 @@ model InventoryItem {
   name String
   rarity String
   image String
-  price Int
+  price Float
   addedAt DateTime @default(now())
   soldAt DateTime?
   caseId String?
