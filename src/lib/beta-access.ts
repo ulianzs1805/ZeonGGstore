@@ -1,7 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const BETA_COOKIE_NAME = "zeon_beta_access";
-export const BETA_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+// Keep beta access across normal redeploys and long testing sessions.
+// The cookie is tied to the site's domain, so deployments on the same stable
+// domain do not require entering the beta code again.
+export const BETA_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 function getSessionSecret() {
   return process.env.ZEON_BETA_SESSION_SECRET || process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || "";
