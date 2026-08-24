@@ -63,7 +63,7 @@ export function ensureSystemCatalog(prisma: PrismaClient) {
     await ensureFableCase(tx);
     await syncCatalog(tx);
     await enforceFableExclusiveM4(tx);
-  }).catch((error) => {
+  }, { maxWait: 30000, timeout: 30000 }).catch((error) => {
     syncPromise = null;
     throw error;
   });
