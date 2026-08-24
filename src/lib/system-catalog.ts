@@ -3,7 +3,7 @@ import { Environment, Prisma, PrismaClient } from "@prisma/client";
 export const SYSTEM_DROPS = [
   { name: "AKR Necromancer", rarity: "LEGENDARY", image: "/skins/akr-necromancer.png", probability: 55, price: 220 },
   { name: "G22 Monster", rarity: "EPIC", image: "/skins/g22-monster.png", probability: 20, price: 150 },
-  { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 7000 },
+  { name: "AWM Winter Sport", rarity: "LEGENDARY", image: "/skins/awm-winter-sport.png", probability: 15, price: 14999 },
 ] as const;
 
 export const FURIOUS_DROPS = [
@@ -78,10 +78,22 @@ async function syncCatalog(db: CatalogDb) {
       const existingByName = existingDrops.find((drop) => drop.name === definition.name);
       const price = protectedCollection && existingByName ? existingByName.price : definition.price;
       const data = { name: definition.name, rarity: definition.rarity, image: definition.image, probability: definition.probability, price, environment: Environment.SYSTEM };
-      if (existingByName) { await db.drop.update({ where: { id: existingByName.id }, data }); canonicalByName.set(definition.name, existingByName.id); continue; }
+      if (existingByName) {
+        await db.drop.update({ where: { id: existingByName.id }, data });
+        await db.inventoryItem.updateMany({ where: { itemId: existingByName.id, soldAt: null }, data: { name: definition.name, rarity: definition.rarity, image: definition.image, price } });
+        canonicalByName.set(definition.name, existingByName.id);
+        continue;
+      }
       const reusableDrop = reusable.find((drop) => reusableIds.has(drop.id));
-      if (reusableDrop) { reusableIds.delete(reusableDrop.id); await db.drop.update({ where: { id: reusableDrop.id }, data }); canonicalByName.set(definition.name, reusableDrop.id); continue; }
-      const created = await db.drop.create({ data: { ...data, caseId: currentCase.id } }); canonicalByName.set(definition.name, created.id);
+      if (reusableDrop) {
+        reusableIds.delete(reusableDrop.id);
+        await db.drop.update({ where: { id: reusableDrop.id }, data });
+        await db.inventoryItem.updateMany({ where: { itemId: reusableDrop.id, soldAt: null }, data: { name: definition.name, rarity: definition.rarity, image: definition.image, price } });
+        canonicalByName.set(definition.name, reusableDrop.id);
+        continue;
+      }
+      const created = await db.drop.create({ data: { ...data, caseId: currentCase.id } });
+      canonicalByName.set(definition.name, created.id);
     }
     for (const definition of definitions) {
       const canonicalId = canonicalByName.get(definition.name); if (!canonicalId) continue;
