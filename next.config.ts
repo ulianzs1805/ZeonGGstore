@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
         hostname: "lh3.googleusercontent.com",
       },
     ],
-    unoptimized: true,
+    unoptimized: false,
   },
   async headers() {
     return [
