@@ -47,6 +47,12 @@ export const FABLE_DROPS = [
   { name: "Butterfly Dragon Glass", rarity: "ARCANE", image: "/skins/fable/butterfly-dragon-glass.png", probability: 3, price: 2498 },
 ] as const;
 
+export const PROTECTED_COLLECTION_SLUGS = new Set(["furious", "fable"]);
+
+export function isProtectedCollection(slug: string) {
+  return PROTECTED_COLLECTION_SLUGS.has(slug);
+}
+
 const LEGACY_FURIOUS_DROP_NAMES = ["AKR Necromancer", "G22 Monster", "M4 Samurai", "AWM Winter Sport"] as const;
 
 let syncPromise: Promise<void> | null = null;
@@ -111,12 +117,18 @@ async function syncCatalog(db: CatalogDb) {
       });
     }
 
-    const targetProbabilityMode = ["furious", "fable"].includes(currentCase.slug) ? "MANUAL" : "DYNAMIC";
+    const targetProbabilityMode = isProtectedCollection(currentCase.slug) ? "MANUAL" : "DYNAMIC";
     if (currentCase.probabilityMode !== targetProbabilityMode) {
       await db.case.update({ where: { id: currentCase.id }, data: { probabilityMode: targetProbabilityMode } });
     }
 
     const definitions = definitionsForSlug(currentCase.slug);
+    const protectedCollection = isProtectedCollection(currentCase.slug);
+    // Fable and Furious are canonical collections: their explicit catalog prices are always restored here.
+    if (protectedCollection) {
+      // no-op marker for the invariant; updates below always use definition.price
+    }
+
     const existingDrops = await db.drop.findMany({ where: { caseId: currentCase.id }, orderBy: { createdAt: "asc" } });
     const unmatched = existingDrops.filter((drop) => !definitions.some((definition) => definition.name === drop.name));
     const matchedCount = existingDrops.filter((drop) => definitions.some((definition) => definition.name === drop.name)).length;
