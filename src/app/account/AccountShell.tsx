@@ -1,12 +1,57 @@
 "use client";
 
-import SidebarNav from "./SidebarNav";
-import type { AccountSection } from "./account-types";
+import Image from "next/image";
+import Link from "next/link";
+import type { AccountSection, AccountUser } from "./account-types";
 
-export function StateMessage({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-[18px] border border-dashed border-white/10 bg-[#0d131b]/70 p-6 text-center text-sm text-slate-300">{children}</div>;
+const nav = [
+  ["Профиль", "/account", "profile"],
+  ["Инвентарь", "/account/inventory", "inventory"],
+  ["История", "/account/operations", "transactions"],
+  ["Статистика", "/account/statistics", "statistics"],
+  ["Поддержка", "/account/support", "support"],
+  ["Настройки", "/account/settings", "settings"],
+] as const;
+
+const formatNumber = (value: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value);
+const displayName = (name: string | null | undefined, email: string | null | undefined) => name?.trim() || (email?.split("@")[0] || "Игрок").replace(/[._-]+/g, " ");
+
+function Icon({ kind }: { kind: string }) {
+  const base = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+    {kind === "profile" && <><circle {...base} cx="12" cy="8" r="3.5" /><path {...base} d="M4.5 20a7.5 7.5 0 0 1 15 0" /></>}
+    {kind === "inventory" && <><path {...base} d="m4 8 8-4 8 4-8 4-8-4Z" /><path {...base} d="M4 8v8l8 4 8-4V8M12 12v8" /></>}
+    {kind === "transactions" && <><circle {...base} cx="12" cy="12" r="8.5" /><path {...base} d="M12 7v5l3.5 2" /></>}
+    {kind === "statistics" && <path {...base} d="M5 19V11M12 19V6M19 19V3M3 20h18" />}
+    {kind === "support" && <><path {...base} d="M4 13v-1a8 8 0 0 1 16 0v1M4 13h3v6H4v-6Zm16 0h-3v6h3v-6ZM8 20h5" /></>}
+    {kind === "settings" && <><circle {...base} cx="12" cy="12" r="3" /><path {...base} d="m19 12 2-1-2-4-2 .5a7 7 0 0 0-2-1.2L14.5 4h-5L9 6.3a7 7 0 0 0-2 1.2L5 7l-2 4 2 1a7 7 0 0 0 0 2l-2 1 2 4 2-.5a7 7 0 0 0 2 1.2l.5 2.3h5l.5-2.3a7 7 0 0 0 2-1.2l2 .5 2-4-2-1a7 7 0 0 0 0-2Z" /></>}
+  </svg>;
 }
 
-export default function AccountShell({ active, title, children }: { active: AccountSection; title: string; children: React.ReactNode }) {
-  return <main className="min-h-screen bg-[#04070d] text-white"><div className="mx-auto max-w-[1460px] px-4 pb-12 pt-5 sm:px-6 lg:px-8"><div className="overflow-hidden rounded-[26px] border border-violet-500/10 bg-[#060b13] shadow-[0_0_50px_rgba(153,92,255,0.14)]"><div className="flex min-h-[620px] flex-col bg-[#060b13] lg:flex-row"><aside className="w-full border-b border-white/10 bg-[#060b13] p-5 lg:w-[260px] lg:border-b-0 lg:border-r"><div className="mb-6 flex items-center gap-2"><span className="text-[1.7rem] font-black tracking-[-0.12em] text-[#f6f1ff]">ZEON</span><span className="text-[0.52rem] font-black tracking-[0.42em] text-violet-300/90">GGSTORE</span></div><SidebarNav active={active} /></aside><section className="flex-1 bg-[#070d16]"><div className="border-b border-white/10 bg-[#070d16]/70 px-5 py-5 sm:px-6 lg:px-7"><h1 className="text-2xl font-black tracking-[-0.06em] text-white">{title}</h1></div><div className="p-5 sm:p-6 lg:p-7">{children}</div></section></div></div></div></main>;
+export function StateMessage({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-[22px] border border-white/10 bg-[#0c0d16] p-6 text-center text-sm text-slate-300">{children}</div>;
+}
+
+type Props = { active: AccountSection; title: string; user?: AccountUser; children: React.ReactNode };
+
+export default function AccountShell({ active, title, user, children }: Props) {
+  const name = displayName(user?.name, user?.email);
+  const balance = user?.balance || 0;
+  return <main className="min-h-screen bg-[#05070c] text-white"><div className="mx-auto max-w-[1480px] px-3 pb-28 pt-4 sm:px-5 lg:px-7">
+    <section className="overflow-hidden rounded-[26px] border border-violet-400/20 bg-[#0a0b13] shadow-[0_0_60px_rgba(124,58,237,0.13)]">
+      <div className="relative grid min-h-[230px] gap-5 overflow-hidden p-5 sm:grid-cols-[1fr_auto] sm:p-7 lg:p-10">
+        <div className="pointer-events-none absolute inset-0 opacity-80 [background:radial-gradient(circle_at_48%_38%,rgba(117,52,255,0.24),transparent_24%),radial-gradient(circle_at_70%_18%,rgba(77,29,130,0.22),transparent_28%)]" />
+        <div className="relative flex min-w-0 items-center gap-4 sm:gap-6">
+          <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-violet-300/30 bg-[linear-gradient(135deg,#1d0b31,#07070d)] shadow-[0_0_35px_rgba(138,54,255,0.28)] sm:h-36 sm:w-36">{user?.avatar ? <Image src={user.avatar} alt="Аватар" width={144} height={144} className="h-full w-full object-cover" /> : <span className="text-6xl font-black italic text-violet-300">{name.slice(0, 1).toUpperCase() || "Z"}</span>}</div>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-3"><h1 className="truncate text-3xl font-black tracking-[-0.05em] sm:text-4xl">{name}</h1><span className="rounded-full bg-violet-500/20 px-2 py-1 text-xs text-violet-200">◆</span></div><div className="mt-2 text-sm text-slate-400">ID: {user?.id || "—"}</div></div>
+        </div>
+        <div className="relative flex min-w-[230px] flex-col justify-center rounded-[22px] border border-white/5 bg-black/20 p-6 sm:min-w-[280px]"><span className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Баланс</span><div className="mt-2 text-3xl font-black tabular-nums sm:text-4xl">{formatNumber(balance)} <span className="text-yellow-300">Z</span></div><Link href="/bonuses" className="mt-5 rounded-xl bg-violet-600 px-5 py-3 text-center text-sm font-black uppercase tracking-wide shadow-[0_0_28px_rgba(124,58,237,.45)] transition hover:bg-violet-500">Пополнить</Link></div>
+      </div>
+      <nav className="relative grid grid-cols-3 border-t border-white/10 bg-black/15 sm:grid-cols-6" aria-label="Навигация профиля">{nav.map(([label, href, kind]) => {
+        const isActive = active === kind || (active === "transactions" && kind === "transactions");
+        return <Link key={href} href={href} className={`flex min-h-[74px] flex-col items-center justify-center gap-2 border-b border-white/5 px-2 text-center text-[10px] font-black uppercase tracking-wide transition sm:text-xs ${isActive ? "border-b-2 border-b-violet-400 bg-violet-500/[0.06] text-violet-300" : "text-slate-400 hover:bg-white/[0.03] hover:text-white"}`}><Icon kind={kind} /><span>{label}</span></Link>;
+      })}</nav>
+    </section>
+    <section className="mt-6 overflow-hidden rounded-[22px] border border-violet-300/15 bg-[#0c0d16]"><div className="border-b border-white/10 px-5 py-5 sm:px-6 lg:px-7"><h2 className="text-2xl font-black tracking-[-0.06em] text-white">{title}</h2></div><div className="p-5 sm:p-6 lg:p-7">{children}</div></section>
+  </div></main>;
 }
