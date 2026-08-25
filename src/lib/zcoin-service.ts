@@ -33,20 +33,11 @@ export async function changeZCoin(input: { actorUserId: string; targetUserId: st
   if (reason.trim().length < 5 || reason.length > 500) denied("INVALID_REASON");
 
   return prisma.$transaction(async (tx) => {
-    // Serialize balance changes and daily-limit accounting so concurrent DEV requests
-    // cannot both pass the same limits or overwrite each other's balance.
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(91736423)`;
 
     const existing = await tx.zCoinOperation.findUnique({ where: { idempotencyKey } });
     if (existing) {
-      if (
-        existing.actorUserId !== actorUserId ||
-        existing.targetUserId !== targetUserId ||
-        existing.operation !== operation ||
-        existing.amount !== amount
-      ) {
-        denied("IDEMPOTENCY_CONFLICT");
-      }
+      if (existing.actorUserId !== actorUserId || existing.targetUserId !== targetUserId || existing.operation !== operation || existing.amount !== amount) denied("IDEMPOTENCY_CONFLICT");
       return { replay: true, operation: existing };
     }
 
@@ -54,11 +45,11 @@ export async function changeZCoin(input: { actorUserId: string; targetUserId: st
     const target = await tx.user.findUnique({ where: { id: targetUserId } });
     if (!actor || !target) denied("USER_NOT_FOUND");
 
+    const isOwner = actor.role === "NPN1_DEV";
     const since = startOfDay();
-    const daily = await tx.zCoinOperation.findMany({ where: { actorUserId, status: "SUCCESS", createdAt: { gte: since } } });
+    const daily = isOwner ? [] : await tx.zCoinOperation.findMany({ where: { actorUserId, status: "SUCCESS", createdAt: { gte: since } } });
     const grants = daily.filter((item) => item.operation === "GRANT");
     const revokes = daily.filter((item) => item.operation === "REVOKE");
-    const isOwner = actor.role === "NPN1_DEV";
     const opLimit = operation === "GRANT" ? ZCoinPolicy.DEV_GRANT_PER_OPERATION : ZCoinPolicy.DEV_REVOKE_PER_OPERATION;
     const dailyLimit = operation === "GRANT" ? ZCoinPolicy.DEV_GRANT_DAILY_LIMIT : ZCoinPolicy.DEV_REVOKE_DAILY_LIMIT;
     const userLimit = operation === "GRANT" ? ZCoinPolicy.DEV_USER_GRANT_DAILY_LIMIT : ZCoinPolicy.DEV_USER_REVOKE_DAILY_LIMIT;
@@ -70,82 +61,29 @@ export async function changeZCoin(input: { actorUserId: string; targetUserId: st
     if (!isOwner && daily.reduce((sum, item) => sum + item.amount, 0) + amount > ZCoinPolicy.DEV_TOTAL_DAILY_LIMIT) denied("TOTAL_DAILY_LIMIT_EXCEEDED");
     if (!isOwner && sameUser + amount > userLimit) denied("USER_DAILY_LIMIT_EXCEEDED");
 
-    const balanceUpdate = operation === "GRANT"
-      ? await tx.user.updateMany({
-          where: { id: targetUserId, balance: { lte: 2_147_483_647 - amount } },
-          data: { balance: { increment: amount } },
-        })
-      : await tx.user.updateMany({
-          where: { id: targetUserId, balance: { gte: amount } },
-          data: { balance: { decrement: amount } },
-        });
+    if (operation === "REVOKE" && amount > target.balance) denied("INSUFFICIENT_BALANCE");
+    if (operation === "GRANT" && amount > 2_147_483_647 - target.balance) denied("BALANCE_PROTECTION");
 
-    if (balanceUpdate.count !== 1) denied(operation === "REVOKE" ? "INSUFFICIENT_BALANCE" : "BALANCE_PROTECTION");
+    const oldBalance = target.balance;
+    const newBalance = operation === "GRANT" ? oldBalance + amount : oldBalance - amount;
 
-    const updated = await tx.user.findUnique({ where: { id: targetUserId }, select: { id: true, email: true, name: true, balance: true } });
-    if (!updated) denied("USER_NOT_FOUND");
+    await tx.user.update({ where: { id: targetUserId }, data: { balance: newBalance } });
 
-    const newBalance = updated.balance;
-    const oldBalance = operation === "GRANT" ? newBalance - amount : newBalance + amount;
     const record = await tx.zCoinOperation.create({
-      data: {
-        idempotencyKey,
-        actorUserId,
-        targetUserId,
-        operation,
-        amount,
-        oldBalance,
-        newBalance,
-        reason: reason.trim(),
-        status: "SUCCESS",
-      },
+      data: { idempotencyKey, actorUserId, targetUserId, operation, amount, oldBalance, newBalance, reason: reason.trim(), status: "SUCCESS" },
     });
 
-    await tx.transaction.create({
-      data: {
-        userId: targetUserId,
-        type: operation === "GRANT" ? "ZCOIN_GRANT" : "ZCOIN_REVOKE",
-        zCoinAmount: operation === "GRANT" ? amount : -amount,
-        status: "SUCCESS",
-      },
-    });
-    await tx.operation.create({
-      data: {
-        userId: targetUserId,
-        type: operation === "GRANT" ? "ZCOIN_GRANT" : "ZCOIN_REVOKE",
-        label: reason.trim(),
-        amount: operation === "GRANT" ? amount : -amount,
-        status: "SUCCESS",
-        idempotencyKey: `zcoin:${idempotencyKey}`,
-      },
-    });
+    await tx.transaction.create({ data: { userId: targetUserId, type: operation === "GRANT" ? "ZCOIN_GRANT" : "ZCOIN_REVOKE", zCoinAmount: operation === "GRANT" ? amount : -amount, status: "SUCCESS" } });
+    await tx.operation.create({ data: { userId: targetUserId, type: operation === "GRANT" ? "ZCOIN_GRANT" : "ZCOIN_REVOKE", label: reason.trim(), amount: operation === "GRANT" ? amount : -amount, status: "SUCCESS", idempotencyKey: `zcoin:${idempotencyKey}` } });
 
     if (operation === "GRANT") {
-      await tx.notification.create({
-        data: {
-          userId: targetUserId,
-          type: "ZCOIN_GRANT",
-          title: "Вам начислены Z-Coin",
-          body: `${amount} Z-Coin. Комментарий: ${reason.trim()}`,
-        },
-      });
+      await tx.notification.create({ data: { userId: targetUserId, type: "ZCOIN_GRANT", title: "Вам начислены Z-Coin", body: `${amount} Z-Coin. Комментарий: ${reason.trim()}` } });
     }
 
     const profile = actor.role === "ADMIN" ? null : actor.devProfile?.devId ?? null;
-    await tx.auditLog.create({
-      data: {
-        actorUserId,
-        actorRole: actor.role as Role,
-        actorAdminId: profile,
-        action: operation === "GRANT" ? "ZCOIN_GRANTED" : "ZCOIN_REVOKED",
-        targetType: "USER",
-        targetId: targetUserId,
-        metadata: JSON.stringify({ targetEmail: target.email, amount, oldBalance, newBalance, reason: reason.trim(), idempotencyKey }),
-        status: "SUCCESS",
-      },
-    });
+    await tx.auditLog.create({ data: { actorUserId, actorRole: actor.role as Role, actorAdminId: profile, action: operation === "GRANT" ? "ZCOIN_GRANTED" : "ZCOIN_REVOKED", targetType: "USER", targetId: targetUserId, metadata: JSON.stringify({ targetEmail: target.email, amount, oldBalance, newBalance, reason: reason.trim(), idempotencyKey }), status: "SUCCESS" } });
 
-    return { replay: false, operation: record, user: updated };
+    return { replay: false, operation: record, user: { id: target.id, email: target.email, name: target.name, balance: newBalance } };
   });
 }
 
