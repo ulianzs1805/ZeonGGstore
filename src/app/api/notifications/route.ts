@@ -7,9 +7,9 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Необходим вход" }, { status: 401 });
 
   const notifications = await prisma.$transaction(async (transaction) => {
-    // Serialize notification reconciliation per user so concurrent polling requests
-    // cannot both create the same PAYMENT_SUCCESS notification.
-    await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`zeon-notifications:${user.id}`}))`;
+    // Advisory locks return PostgreSQL's `void`, so use executeRaw rather than
+    // queryRaw; queryRaw tries to deserialize the void result and causes P2010.
+    await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`zeon-notifications:${user.id}`}))`;
 
     const successfulPayments = await transaction.transaction.findMany({
       where: { userId: user.id, status: "SUCCESS", type: { in: ["DEPOSIT", "PURCHASE"] } },
