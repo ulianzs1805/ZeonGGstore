@@ -14,7 +14,7 @@ const CHANCE_BANDS = [
 const MULTIPLIERS = [2, 5, 10] as const;
 
 function chanceFor(inputValue: number, targetValue: number) {
-  if (inputValue <= 0 || targetValue <= 0) return MIN_CHANCE;
+  if (!Number.isFinite(inputValue) || !Number.isFinite(targetValue) || inputValue <= 0 || targetValue <= 0) return MIN_CHANCE;
   return Math.max(MIN_CHANCE, Math.min(MAX_CHANCE, (inputValue / targetValue) * 100));
 }
 
@@ -22,7 +22,9 @@ function publicItem(item: { id: string; name: string; rarity: string; image: str
   return { id: item.id, name: item.name, rarity: item.rarity, image: item.image, price: item.price };
 }
 
-function isAllowedUpgrade(totalInputValue: number, targetPrice: number, chance: number) {
+function isAllowedUpgrade(totalInputValue: number, targetPrice: number) {
+  if (!Number.isFinite(totalInputValue) || !Number.isFinite(targetPrice) || totalInputValue <= 0 || targetPrice <= totalInputValue) return false;
+  const chance = chanceFor(totalInputValue, targetPrice);
   if (CHANCE_BANDS.some((band) => chance >= band.min && chance <= band.max)) return true;
   const ratio = targetPrice / totalInputValue;
   return MULTIPLIERS.some((multiplier) => {
@@ -82,14 +84,20 @@ export async function POST(request: Request) {
       const inputValue = item?.price ?? balanceTopUp;
       const totalInputValue = item ? item.price + balanceTopUp : balanceTopUp;
 
-      if (inputValue <= 0 || totalInputValue <= 0) throw new Error("INPUT_VALUE_REQUIRED");
+      if (!Number.isFinite(inputValue) || !Number.isFinite(totalInputValue) || !Number.isFinite(target.price) || inputValue <= 0 || totalInputValue <= 0) {
+        throw new Error("INPUT_VALUE_INVALID");
+      }
       if (target.price <= totalInputValue) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
       if (balanceTopUp > freshUser.balance) throw new Error("INSUFFICIENT_BALANCE");
 
-      // Never trust a client-calculated chance. Recalculate from authoritative DB prices.
+      // The server is authoritative: calculate the real chance from DB prices.
+      // The client does not send or control the chance/mode.
       const chance = chanceFor(totalInputValue, target.price);
-      if (!isAllowedUpgrade(totalInputValue, target.price, chance)) {
-        throw new Error("UPGRADE_MODE_NOT_ALLOWED");
+      if (!isAllowedUpgrade(totalInputValue, target.price)) {
+        // Keep the strict mode protection, but return a useful machine-readable
+        // error so the UI can immediately select another valid target instead
+        // of leaving the user stuck on an impossible target.
+        throw new Error(`UPGRADE_MODE_NOT_ALLOWED:${chance.toFixed(2)}`);
       }
 
       const roll = randomInt(0, 1_000_000) / 10_000;
@@ -120,7 +128,8 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "UPGRADE_FAILED";
-    const status = ["ITEMS_NOT_AVAILABLE", "ITEMS_CHANGED", "BALANCE_CHANGED", "TARGET_MUST_BE_MORE_EXPENSIVE", "UPGRADE_MODE_NOT_ALLOWED"].includes(code) ? 409 : 400;
-    return NextResponse.json({ error: code }, { status });
+    const baseCode = code.startsWith("UPGRADE_MODE_NOT_ALLOWED") ? "UPGRADE_MODE_NOT_ALLOWED" : code;
+    const status = ["ITEMS_NOT_AVAILABLE", "ITEMS_CHANGED", "BALANCE_CHANGED", "TARGET_MUST_BE_MORE_EXPENSIVE", "UPGRADE_MODE_NOT_ALLOWED", "INPUT_VALUE_INVALID"].includes(baseCode) ? 409 : 400;
+    return NextResponse.json({ error: baseCode }, { status });
   }
 }
