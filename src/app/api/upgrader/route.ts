@@ -22,16 +22,8 @@ export async function GET() {
   await ensureSystemCatalog(prisma);
 
   const [inventory, drops, balance] = await Promise.all([
-    prisma.inventoryItem.findMany({
-      where: { userId: user.id, soldAt: null },
-      orderBy: { addedAt: "desc" },
-      select: { id: true, name: true, rarity: true, image: true, price: true },
-    }),
-    prisma.drop.findMany({
-      where: { case: { environment: "SYSTEM", isActive: true } },
-      orderBy: [{ price: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, rarity: true, image: true, price: true },
-    }),
+    prisma.inventoryItem.findMany({ where: { userId: user.id, soldAt: null }, orderBy: { addedAt: "desc" }, select: { id: true, name: true, rarity: true, image: true, price: true } }),
+    prisma.drop.findMany({ where: { case: { environment: "SYSTEM", isActive: true } }, orderBy: [{ price: "asc" }, { name: "asc" }], select: { id: true, name: true, rarity: true, image: true, price: true } }),
     prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
   ]);
 
@@ -42,19 +34,11 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
 
-  const body = await request.json().catch(() => null) as {
-    itemId?: unknown;
-    targetId?: unknown;
-    idempotencyKey?: unknown;
-    balanceTopUp?: unknown;
-  } | null;
-
+  const body = await request.json().catch(() => null) as { itemId?: unknown; targetId?: unknown; idempotencyKey?: unknown; balanceTopUp?: unknown } | null;
   const itemId = typeof body?.itemId === "string" ? body.itemId : "";
   const targetId = typeof body?.targetId === "string" ? body.targetId : "";
   const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.slice(0, 100) : "";
-  const balanceTopUp = typeof body?.balanceTopUp === "number" && Number.isFinite(body.balanceTopUp)
-    ? Math.floor(body.balanceTopUp)
-    : 0;
+  const balanceTopUp = typeof body?.balanceTopUp === "number" && Number.isFinite(body.balanceTopUp) ? Math.floor(body.balanceTopUp) : 0;
 
   if (!idempotencyKey) return NextResponse.json({ error: "IDEMPOTENCY_KEY_REQUIRED" }, { status: 400 });
   if (!targetId) return NextResponse.json({ error: "TARGET_REQUIRED" }, { status: 400 });
@@ -62,18 +46,8 @@ export async function POST(request: Request) {
 
   const previous = await prisma.operation.findUnique({ where: { idempotencyKey } });
   if (previous) {
-    const reward = previous.status === "SUCCESS"
-      ? await prisma.operation.findUnique({
-          where: { idempotencyKey: `${idempotencyKey}:reward` },
-          include: { item: true },
-        })
-      : null;
-    return NextResponse.json({
-      ok: previous.status === "SUCCESS",
-      replay: true,
-      status: previous.status,
-      resultItem: reward?.item ? publicItem(reward.item) : null,
-    });
+    const reward = previous.status === "SUCCESS" ? await prisma.operation.findUnique({ where: { idempotencyKey: `${idempotencyKey}:reward` }, include: { item: true } }) : null;
+    return NextResponse.json({ ok: previous.status === "SUCCESS", replay: true, status: previous.status, resultItem: reward?.item ? publicItem(reward.item) : null });
   }
 
   await ensureSystemCatalog(prisma);
@@ -81,16 +55,8 @@ export async function POST(request: Request) {
   try {
     const result = await prisma.$transaction(async (tx) => {
       const [item, target, freshUser] = await Promise.all([
-        itemId
-          ? tx.inventoryItem.findFirst({
-              where: { id: itemId, userId: user.id, soldAt: null },
-              select: { id: true, name: true, rarity: true, image: true, price: true },
-            })
-          : Promise.resolve(null),
-        tx.drop.findFirst({
-          where: { id: targetId, case: { environment: "SYSTEM", isActive: true } },
-          select: { id: true, name: true, rarity: true, image: true, price: true },
-        }),
+        itemId ? tx.inventoryItem.findFirst({ where: { id: itemId, userId: user.id, soldAt: null }, select: { id: true, name: true, rarity: true, image: true, price: true } }) : Promise.resolve(null),
+        tx.drop.findFirst({ where: { id: targetId, case: { environment: "SYSTEM", isActive: true } }, select: { id: true, name: true, rarity: true, image: true, price: true } }),
         tx.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
       ]);
 
@@ -98,15 +64,15 @@ export async function POST(request: Request) {
       if (!target) throw new Error("TARGET_NOT_FOUND");
       if (!freshUser) throw new Error("USER_NOT_FOUND");
 
-      // Two supported modes:
-      // 1) normal upgrade: inventory item + optional balance top-up;
-      // 2) no-skin mode: balanceTopUp itself is the amount being risked.
+      // Normal mode: the inventory item's real stored price is the base value.
+      // No-skin mode: the amount taken from Z-Coin is the base value.
       const inputValue = item?.price ?? balanceTopUp;
       const totalInputValue = item ? item.price + balanceTopUp : balanceTopUp;
 
       if (inputValue <= 0 || totalInputValue <= 0) throw new Error("INPUT_VALUE_REQUIRED");
-      if (target.price <= inputValue && item) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
-      if (target.price <= totalInputValue && !item) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
+      // The target must be more expensive than the entire amount being risked.
+      // This prevents a top-up from silently turning the upgrade into a 100% purchase.
+      if (target.price <= totalInputValue) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
       if (balanceTopUp > freshUser.balance) throw new Error("INSUFFICIENT_BALANCE");
 
       const chance = chanceFor(totalInputValue, target.price);
@@ -115,93 +81,30 @@ export async function POST(request: Request) {
       const now = new Date();
 
       if (item) {
-        const consumed = await tx.inventoryItem.updateMany({
-          where: { id: item.id, userId: user.id, soldAt: null },
-          data: { soldAt: now },
-        });
+        const consumed = await tx.inventoryItem.updateMany({ where: { id: item.id, userId: user.id, soldAt: null }, data: { soldAt: now } });
         if (consumed.count !== 1) throw new Error("ITEMS_CHANGED");
       }
 
       if (balanceTopUp > 0) {
-        const updatedUser = await tx.user.updateMany({
-          where: { id: user.id, balance: { gte: balanceTopUp } },
-          data: { balance: { decrement: balanceTopUp } },
-        });
+        const updatedUser = await tx.user.updateMany({ where: { id: user.id, balance: { gte: balanceTopUp } }, data: { balance: { decrement: balanceTopUp } } });
         if (updatedUser.count !== 1) throw new Error("BALANCE_CHANGED");
       }
 
-      await tx.operation.create({
-        data: {
-          userId: user.id,
-          type: success ? "UPGRADE_WIN" : "UPGRADE_LOSS",
-          label: success ? `Апгрейд → ${target.name}` : `Апгрейд → ${target.name} (неудача)`,
-          amount: -totalInputValue,
-          status: success ? "SUCCESS" : "FAILED",
-          idempotencyKey,
-        },
-      });
+      await tx.operation.create({ data: { userId: user.id, type: success ? "UPGRADE_WIN" : "UPGRADE_LOSS", label: success ? `Апгрейд → ${target.name}` : `Апгрейд → ${target.name} (неудача)`, amount: -totalInputValue, status: success ? "SUCCESS" : "FAILED", idempotencyKey } });
 
-      if (!success) {
-        return {
-          success,
-          chance,
-          roll,
-          target: publicItem(target),
-          resultItem: null,
-          inputItem: item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: 0 },
-          inputValue,
-          balanceTopUp,
-          totalInputValue,
-        };
-      }
+      const inputItem = item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: 0 };
+      if (!success) return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue };
 
-      const resultItem = await tx.inventoryItem.create({
-        data: {
-          userId: user.id,
-          itemId: target.id,
-          name: target.name,
-          rarity: target.rarity,
-          image: target.image,
-          price: target.price,
-        },
-      });
+      const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
+      await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_REWARD", itemId: resultItem.id, label: `Получен ${target.name}`, amount: target.price, status: "SUCCESS", idempotencyKey: `${idempotencyKey}:reward` } });
 
-      await tx.operation.create({
-        data: {
-          userId: user.id,
-          type: "UPGRADE_REWARD",
-          itemId: resultItem.id,
-          label: `Получен ${target.name}`,
-          amount: target.price,
-          status: "SUCCESS",
-          idempotencyKey: `${idempotencyKey}:reward`,
-        },
-      });
-
-      return {
-        success,
-        chance,
-        roll,
-        target: publicItem(target),
-        resultItem: publicItem(resultItem),
-        inputItem: item
-          ? publicItem(item)
-          : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: 0 },
-        inputValue,
-        balanceTopUp,
-        totalInputValue,
-      };
+      return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem), inputItem, inputValue, balanceTopUp, totalInputValue };
     });
 
     return NextResponse.json(result);
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "UPGRADE_FAILED";
-    const status = [
-      "ITEMS_NOT_AVAILABLE",
-      "ITEMS_CHANGED",
-      "BALANCE_CHANGED",
-      "TARGET_MUST_BE_MORE_EXPENSIVE",
-    ].includes(code) ? 409 : 400;
+    const status = ["ITEMS_NOT_AVAILABLE", "ITEMS_CHANGED", "BALANCE_CHANGED", "TARGET_MUST_BE_MORE_EXPENSIVE"].includes(code) ? 409 : 400;
     return NextResponse.json({ error: code }, { status });
   }
 }
