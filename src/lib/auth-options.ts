@@ -8,7 +8,28 @@ const hasGoogleConfig = Boolean(googleClientId && googleClientSecret);
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
+  trustHost: true,
   session: { strategy: "jwt" },
+  cookies: {
+    state: {
+      name: "__Secure-next-auth.state",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
+    nonce: {
+      name: "__Secure-next-auth.nonce",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
+  },
   providers: hasGoogleConfig
     ? [
         GoogleProvider({
