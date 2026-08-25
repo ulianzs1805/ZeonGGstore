@@ -1,17 +1,19 @@
 "use client";
 
 import Image from "next/image";
+import { resolveSkinImage } from "@/lib/skin-image";
 import type { CaseItem } from "../lib/types";
 
 type Props = { winner: CaseItem; resultClosing: boolean; resultAction: "inventory" | "sell" | null; onAction: (action: "inventory" | "sell") => void; onOpenAgain: () => void };
 
 export default function WinnerModal({ winner, resultClosing, resultAction, onAction, onOpenAgain }: Props) {
+  const imageSrc = resolveSkinImage(winner.name, winner.image);
   return (
     <div className={["mt-8 rounded-3xl border border-yellow-400/20 bg-zinc-950/90 p-6 transition-all", resultClosing ? "opacity-0" : "opacity-100"].join(" ")}>
       <div className="flex flex-col gap-6">
         <div className="flex min-w-0 items-center gap-5">
           <div className="relative h-24 w-24 shrink-0">
-            <Image src={winner.image} alt={winner.name} fill className="object-contain" sizes="96px" unoptimized priority />
+            <Image src={imageSrc} alt={winner.name} fill className="object-contain" sizes="96px" unoptimized priority />
           </div>
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-yellow-400">Твой дроп</p>
