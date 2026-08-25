@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { getRarityTextClass } from "@/lib/rarity-styles";
+import { resolveSkinImage } from "@/lib/skin-image";
 
 const BEST_DROP_KEY = "zeon_best_drop_v1";
 const STORE_UPDATE_EVENT = "zeon-store-updated";
@@ -44,7 +45,7 @@ export default function RecentDropsStrip({ title = "Последние дроп�
         if (!response.ok) return;
         const body = await response.text();
         const data = body ? JSON.parse(body) as { drops?: Array<{ id: string; itemId?: string; name: string; rarity: string; image: string; userName?: string | null; case?: { slug: string; name: string; image: string } | null }> } : {};
-        setDrops((data.drops ?? []).map((drop) => ({ id: drop.itemId ?? drop.id, name: drop.name, rarity: drop.rarity, image: drop.image, color: getRarityTextClass(drop.rarity), caseId: drop.case?.slug, caseName: drop.case?.name, caseImage: drop.case?.image, userName: drop.userName })));
+        setDrops((data.drops ?? []).map((drop) => ({ id: drop.itemId ?? drop.id, name: drop.name, rarity: drop.rarity, image: resolveSkinImage(drop.name, drop.image), color: getRarityTextClass(drop.rarity), caseId: drop.case?.slug, caseName: drop.case?.name, caseImage: drop.case?.image, userName: drop.userName })));
       } catch {
         // Keep the last successful feed visible during a transient API failure.
       }
