@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureSystemCatalog } from "@/lib/system-catalog";
+import { resolveSkinImage } from "@/lib/skin-image";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function validPrice(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0.01;
+}
 
 export async function GET() {
   try {
@@ -29,13 +34,16 @@ export async function GET() {
       {
         drops: items.map((item) => {
           const currentDrop = dropsById.get(item.itemId);
+          const name = currentDrop?.name ?? item.name;
+          const image = resolveSkinImage(name, currentDrop?.image ?? item.image);
+          const price = validPrice(currentDrop?.price) ? currentDrop!.price : validPrice(item.price) ? item.price : 0;
           return {
             id: item.id,
             itemId: item.itemId,
-            name: currentDrop?.name ?? item.name,
+            name,
             rarity: currentDrop?.rarity ?? item.rarity,
-            image: currentDrop?.image ?? item.image,
-            price: currentDrop?.price ?? item.price,
+            image,
+            price,
             addedAt: item.addedAt,
             userName: item.user.name,
             case: item.case,
