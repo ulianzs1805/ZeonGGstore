@@ -5,19 +5,15 @@ const publicFile = /\.[^/]+$/;
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const canonicalOrigin = process.env.NEXTAUTH_URL?.replace(/\/$/, "");
 
-  // OAuth state is stored in a host-bound cookie. If the user starts Google
-  // sign-in on a Vercel deployment alias but NEXTAUTH_URL points at the
-  // canonical production domain, the callback arrives on another host and
-  // NextAuth correctly reports "State cookie was missing". Keep the whole
-  // auth flow on the canonical origin.
-  if (pathname.startsWith("/api/auth/")) {
-    const canonicalOrigin = process.env.NEXTAUTH_URL?.replace(/\/$/, "");
-    if (canonicalOrigin && request.nextUrl.origin !== canonicalOrigin) {
-      const canonicalUrl = new URL(`${canonicalOrigin}${pathname}${search}`);
-      return NextResponse.redirect(canonicalUrl, 307);
-    }
-    return NextResponse.next();
+  // Keep the entire application on the same canonical origin. This is
+  // important not only for OAuth state cookies, but also for the beta cookie:
+  // cookies are host-bound, so opening a Vercel deployment alias would make a
+  // previously confirmed beta session look unauthenticated.
+  if (canonicalOrigin && request.nextUrl.origin !== canonicalOrigin) {
+    const canonicalUrl = new URL(`${canonicalOrigin}${pathname}${search}`);
+    return NextResponse.redirect(canonicalUrl, 307);
   }
 
   if (
