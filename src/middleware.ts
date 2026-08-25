@@ -6,15 +6,25 @@ const publicFile = /\.[^/]+$/;
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
+  // OAuth state is stored in a host-bound cookie. If the user starts Google
+  // sign-in on a Vercel deployment alias but NEXTAUTH_URL points at the
+  // canonical production domain, the callback arrives on another host and
+  // NextAuth correctly reports "State cookie was missing". Keep the whole
+  // auth flow on the canonical origin.
+  if (pathname.startsWith("/api/auth/")) {
+    const canonicalOrigin = process.env.NEXTAUTH_URL?.replace(/\/$/, "");
+    if (canonicalOrigin && request.nextUrl.origin !== canonicalOrigin) {
+      const canonicalUrl = new URL(`${canonicalOrigin}${pathname}${search}`);
+      return NextResponse.redirect(canonicalUrl, 307);
+    }
+    return NextResponse.next();
+  }
+
   if (
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
     pathname === "/beta" ||
-    pathname.startsWith("/api/beta") ||
-    pathname.startsWith("/api/auth/") ||
-    // The case catalog is read-only/public data. Keep case opening and
-    // inventory endpoints protected, but don't let a missing beta cookie
-    // prevent the case page from loading its catalog.
+    pathname.startsWith("/api/beta/") ||
     (pathname === "/api/cases" && request.method === "GET")
   ) {
     return NextResponse.next();
@@ -24,9 +34,7 @@ export async function middleware(request: NextRequest) {
     request.cookies.get(BETA_COOKIE_NAME)?.value,
   );
 
-  if (hasAccess) {
-    return NextResponse.next();
-  }
+  if (hasAccess) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
