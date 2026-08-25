@@ -76,7 +76,10 @@ async function syncCatalog(db: CatalogDb) {
     const canonicalByName = new Map<string, string>();
     for (const definition of definitions) {
       const existingByName = existingDrops.find((drop) => drop.name === definition.name);
-      const price = protectedCollection && existingByName && definition.name !== "M4 Samurai" ? existingByName.price : definition.price;
+      const existingPrice = existingByName?.price;
+      const price = protectedCollection && existingByName && Number.isFinite(existingPrice) && existingPrice >= 0.01 && definition.name !== "M4 Samurai"
+        ? existingPrice
+        : definition.price;
       const data = { name: definition.name, rarity: definition.rarity, image: definition.image, probability: definition.probability, price, environment: Environment.SYSTEM };
       if (existingByName) {
         await db.drop.update({ where: { id: existingByName.id }, data });
