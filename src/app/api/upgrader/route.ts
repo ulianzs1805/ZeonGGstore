@@ -6,6 +6,12 @@ import { prisma } from "@/lib/prisma";
 
 const MIN_CHANCE = 0.1;
 const MAX_CHANCE = 100;
+const CHANCE_BANDS = [
+  { min: 30, max: 39.99 },
+  { min: 50, max: 59.99 },
+  { min: 70, max: 79.99 },
+] as const;
+const MULTIPLIERS = [2, 5, 10] as const;
 
 function chanceFor(inputValue: number, targetValue: number) {
   if (inputValue <= 0 || targetValue <= 0) return MIN_CHANCE;
@@ -14,6 +20,15 @@ function chanceFor(inputValue: number, targetValue: number) {
 
 function publicItem(item: { id: string; name: string; rarity: string; image: string; price: number }) {
   return { id: item.id, name: item.name, rarity: item.rarity, image: item.image, price: item.price };
+}
+
+function isAllowedUpgrade(totalInputValue: number, targetPrice: number, chance: number) {
+  if (CHANCE_BANDS.some((band) => chance >= band.min && chance <= band.max)) return true;
+  const ratio = targetPrice / totalInputValue;
+  return MULTIPLIERS.some((multiplier) => {
+    const tolerance = multiplier * 0.1;
+    return ratio >= multiplier - tolerance && ratio <= multiplier + tolerance;
+  });
 }
 
 export async function GET() {
@@ -64,18 +79,19 @@ export async function POST(request: Request) {
       if (!target) throw new Error("TARGET_NOT_FOUND");
       if (!freshUser) throw new Error("USER_NOT_FOUND");
 
-      // Normal mode: the inventory item's real stored price is the base value.
-      // No-skin mode: the amount taken from Z-Coin is the base value.
       const inputValue = item?.price ?? balanceTopUp;
       const totalInputValue = item ? item.price + balanceTopUp : balanceTopUp;
 
       if (inputValue <= 0 || totalInputValue <= 0) throw new Error("INPUT_VALUE_REQUIRED");
-      // The target must be more expensive than the entire amount being risked.
-      // This prevents a top-up from silently turning the upgrade into a 100% purchase.
       if (target.price <= totalInputValue) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
       if (balanceTopUp > freshUser.balance) throw new Error("INSUFFICIENT_BALANCE");
 
+      // Never trust a client-calculated chance. Recalculate from authoritative DB prices.
       const chance = chanceFor(totalInputValue, target.price);
+      if (!isAllowedUpgrade(totalInputValue, target.price, chance)) {
+        throw new Error("UPGRADE_MODE_NOT_ALLOWED");
+      }
+
       const roll = randomInt(0, 1_000_000) / 10_000;
       const success = roll < chance;
       const now = new Date();
@@ -104,7 +120,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "UPGRADE_FAILED";
-    const status = ["ITEMS_NOT_AVAILABLE", "ITEMS_CHANGED", "BALANCE_CHANGED", "TARGET_MUST_BE_MORE_EXPENSIVE"].includes(code) ? 409 : 400;
+    const status = ["ITEMS_NOT_AVAILABLE", "ITEMS_CHANGED", "BALANCE_CHANGED", "TARGET_MUST_BE_MORE_EXPENSIVE", "UPGRADE_MODE_NOT_ALLOWED"].includes(code) ? 409 : 400;
     return NextResponse.json({ error: code }, { status });
   }
 }
