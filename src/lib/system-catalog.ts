@@ -37,7 +37,7 @@ export const FABLE_DROPS = [
   { name: "M4 Lizard", rarity: "LEGENDARY", image: "/skins/fable/m4-lizard.png", probability: 7, price: 32 },
   { name: "Tec-9 Fable", rarity: "LEGENDARY", image: "/skins/fable/tec9-fable.png", probability: 7, price: 32 },
   { name: "F/S Venom", rarity: "ARCANE", image: "/skins/fable/fs-venom.png", probability: 6, price: 161 },
-  { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/fable/m4-samurai.png", probability: 6, price: 168 },
+  { name: "M4 Samurai", rarity: "ARCANE", image: "/skins/fable/m4-samurai.png", probability: 6, price: 125 },
   { name: "Butterfly Starfall", rarity: "ARCANE", image: "/skins/fable/butterfly-starfall.png", probability: 3, price: 2000 },
   { name: "Butterfly Black Window", rarity: "ARCANE", image: "/skins/fable/butterfly-black-window.png", probability: 3, price: 2175 },
   { name: "Butterfly Legacy", rarity: "ARCANE", image: "/skins/fable/butterfly-legacy.png", probability: 3, price: 2450 },
@@ -76,7 +76,8 @@ async function syncCatalog(db: CatalogDb) {
     const canonicalByName = new Map<string, string>();
     for (const definition of definitions) {
       const existingByName = existingDrops.find((drop) => drop.name === definition.name);
-      const price = protectedCollection && existingByName ? existingByName.price : definition.price;
+      // M4 Samurai is a locked ZeonGGStore price. Other protected drops keep their admin-set price.
+      const price = protectedCollection && existingByName && definition.name !== "M4 Samurai" ? existingByName.price : definition.price;
       const data = { name: definition.name, rarity: definition.rarity, image: definition.image, probability: definition.probability, price, environment: Environment.SYSTEM };
       if (existingByName) {
         await db.drop.update({ where: { id: existingByName.id }, data });
@@ -109,5 +110,5 @@ async function enforceFableExclusiveM4(db: CatalogDb) {
   const fable = await db.case.findUnique({ where: { slug: "fable" }, include: { drops: true } }); if (!fable) return;
   const canonical = fable.drops.find((drop) => drop.name === "M4 Samurai"); if (!canonical) return;
   const foreign = await db.drop.findMany({ where: { name: "M4 Samurai", caseId: { not: canonical.caseId } }, select: { id: true } });
-  for (const duplicate of foreign) { await db.inventoryItem.updateMany({ where: { itemId: duplicate.id }, data: { itemId: canonical.id, name: canonical.name, rarity: canonical.rarity, image: canonical.image, price: canonical.price, caseId: fable.id } }); await db.drop.delete({ where: { id: duplicate.id } }); }
+  for (const duplicate of foreign) { await db.inventoryItem.updateMany({ where: { itemId: duplicate.id }, data: { itemId: canonical.id, name: canonical.name, rarity: canonical.rarity, image: canonical.image, price: 125, caseId: fable.id } }); await db.drop.delete({ where: { id: duplicate.id } }); }
 }
