@@ -33,7 +33,7 @@ export async function changeZCoin(input: { actorUserId: string; targetUserId: st
   if (reason.trim().length < 5 || reason.length > 500) denied("INVALID_REASON");
 
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(91736423)`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(91736423)`;
 
     const existing = await tx.zCoinOperation.findUnique({ where: { idempotencyKey } });
     if (existing) {
