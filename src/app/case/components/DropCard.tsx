@@ -3,13 +3,14 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { getRarityCardClass } from "@/lib/rarity-styles";
+import { resolveSkinImage } from "@/lib/skin-image";
 import type { CaseItem } from "../lib/types";
 
 const IMAGE_RETRY_LIMIT = 3;
 const IMAGE_RETRY_DELAY = 250;
 
 export default function DropCard({ item, winner = false }: { item: CaseItem; winner?: boolean }) {
-  const imageSrc = useMemo(() => (typeof item.image === "string" ? item.image.trim() : ""), [item.image]);
+  const imageSrc = useMemo(() => resolveSkinImage(item.name, typeof item.image === "string" ? item.image : ""), [item.name, item.image]);
   const [imageError, setImageError] = useState(false);
   const [imageAttempt, setImageAttempt] = useState(0);
 
