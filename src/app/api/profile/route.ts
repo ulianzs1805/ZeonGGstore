@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
+import { ensureSystemCatalog } from "@/lib/system-catalog";
 import { prisma } from "@/lib/prisma";
 
 function isValidPrice(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0.01;
 }
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Необходим вход" }, { status: 401 });
+
+  // Repair protected/system catalog data before reading inventory so corrupted
+  // Float values cannot leak into the profile or upgrader UI.
+  await ensureSystemCatalog(prisma);
 
   const [profile, inventory, operations, transactions, tickets] = await Promise.all([
     prisma.user.findUnique({
@@ -23,8 +28,6 @@ export async function GET() {
 
   if (!profile) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
 
-  // Inventory prices/images are copied when an item is won. Repair the response from
-  // the canonical Drop so an old/corrupted Float value can never reach the UI.
   const itemIds = inventory.map((item) => item.itemId).filter(Boolean);
   const canonicalDrops = itemIds.length
     ? await prisma.drop.findMany({ where: { id: { in: itemIds } }, select: { id: true, name: true, rarity: true, image: true, price: true } })
@@ -33,13 +36,13 @@ export async function GET() {
 
   const repairedInventory = inventory.map((item) => {
     const canonical = dropsById.get(item.itemId);
-    const price = canonical && isValidPrice(canonical.price) ? canonical.price : item.price;
+    const price = canonical && isValidPrice(canonical.price) ? canonical.price : isValidPrice(item.price) ? item.price : 0;
     return {
       ...item,
       name: canonical?.name || item.name,
       rarity: canonical?.rarity || item.rarity,
       image: canonical?.image || item.image,
-      price: isValidPrice(price) ? price : 0,
+      price,
     };
   });
 
