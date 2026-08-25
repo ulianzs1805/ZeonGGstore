@@ -17,7 +17,7 @@ const FABLE_IMAGES: Record<string, string> = {
   "Butterfly Dragon Glass": "/skins/fable/butterfly-dragon-glass.png",
 };
 
-const IMAGE_CACHE_VERSION = "skin-assets-v1";
+const IMAGE_CACHE_VERSION = "skin-assets-v2";
 
 function normalizeName(value: string) {
   return value
@@ -34,8 +34,6 @@ const IMAGE_BY_NORMALIZED_NAME = Object.fromEntries(
 );
 
 function withCacheVersion(src: string) {
-  // Never touch external/CDN URLs. Local skin assets always get a version so an
-  // old browser/Vercel cache cannot keep serving a stale or broken PNG.
   if (!src.startsWith("/")) return src;
   const separator = src.includes("?") ? "&" : "?";
   return `${src}${separator}v=${IMAGE_CACHE_VERSION}`;
