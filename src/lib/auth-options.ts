@@ -8,58 +8,32 @@ const hasGoogleConfig = Boolean(googleClientId && googleClientSecret);
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
-  trustHost: true,
   session: { strategy: "jwt" },
   cookies: {
     state: {
       name: "__Secure-next-auth.state",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true,
-      },
+      options: { httpOnly: true, sameSite: "lax", path: "/", secure: true },
     },
     nonce: {
       name: "__Secure-next-auth.nonce",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true,
-      },
+      options: { httpOnly: true, sameSite: "lax", path: "/", secure: true },
     },
   },
   providers: hasGoogleConfig
-    ? [
-        GoogleProvider({
-          clientId: googleClientId!,
-          clientSecret: googleClientSecret!,
-          authorization: {
-            params: {
-              prompt: "select_account",
-            },
-          },
-        }),
-      ]
+    ? [GoogleProvider({
+        clientId: googleClientId!,
+        clientSecret: googleClientSecret!,
+        authorization: { params: { prompt: "select_account" } },
+      })]
     : [],
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider !== "google" || !user.email) return false;
-
       await prisma.user.upsert({
         where: { email: user.email.toLowerCase() },
-        update: {
-          name: user.name ?? undefined,
-          avatar: user.image ?? undefined,
-        },
-        create: {
-          email: user.email.toLowerCase(),
-          name: user.name ?? null,
-          avatar: user.image ?? null,
-        },
+        update: { name: user.name ?? undefined, avatar: user.image ?? undefined },
+        create: { email: user.email.toLowerCase(), name: user.name ?? null, avatar: user.image ?? null },
       });
-
       return true;
     },
     async jwt({ token, user }) {
@@ -68,7 +42,6 @@ export const authOptions: NextAuthOptions = {
           where: { email: user.email.toLowerCase() },
           select: { id: true, email: true, name: true, avatar: true, role: true },
         });
-
         if (dbUser) {
           token.userId = dbUser.id;
           token.role = dbUser.role;
@@ -77,7 +50,6 @@ export const authOptions: NextAuthOptions = {
           token.picture = dbUser.avatar ?? undefined;
         }
       }
-
       return token;
     },
     async session({ session, token }) {
