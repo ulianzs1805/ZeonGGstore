@@ -17,12 +17,34 @@ const FABLE_IMAGES: Record<string, string> = {
   "Butterfly Dragon Glass": "/skins/fable/butterfly-dragon-glass.png",
 };
 
-const FABLE_CACHE_VERSION = "fable-png-v3";
+const IMAGE_CACHE_VERSION = "skin-assets-v1";
+
+function normalizeName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\\/]+/g, " ")
+    .replace(/[^a-z0-9а-яё]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const IMAGE_BY_NORMALIZED_NAME = Object.fromEntries(
+  Object.entries(FABLE_IMAGES).map(([name, path]) => [normalizeName(name), path]),
+);
+
+function withCacheVersion(src: string) {
+  // Never touch external/CDN URLs. Local skin assets always get a version so an
+  // old browser/Vercel cache cannot keep serving a stale or broken PNG.
+  if (!src.startsWith("/")) return src;
+  const separator = src.includes("?") ? "&" : "?";
+  return `${src}${separator}v=${IMAGE_CACHE_VERSION}`;
+}
 
 export function resolveSkinImage(name: string | null | undefined, image: string | null | undefined) {
-  const canonical = name ? FABLE_IMAGES[name.trim()] : undefined;
+  const normalizedName = typeof name === "string" ? normalizeName(name) : "";
+  const canonical = normalizedName ? IMAGE_BY_NORMALIZED_NAME[normalizedName] : undefined;
   const src = canonical ?? (typeof image === "string" ? image.trim() : "");
   if (!src) return "";
-  if (!canonical) return src;
-  return `${canonical}${canonical.includes("?") ? "&" : "?"}v=${FABLE_CACHE_VERSION}`;
+  return withCacheVersion(src);
 }
