@@ -46,6 +46,162 @@ function makeParticles(seed: number) {
 
 function preloadImage(src?: string | null) { if (!src || typeof window === "undefined") return; const img = new window.Image(); img.decoding = "async"; img.src = src; }
 
+const skinColorCache = new Map<string, { hex: string; rgb: string }>();
+function rgbToHex(r: number, g: number, b: number) { return "#" + [r, g, b] .map((v) => Math.round(v).toString(16).padStart(2, "0")) .join(""); }
+function extractSkinColor( src?: string | null, fallback = rarityGlow("") ): Promise<{ hex: string; rgb: string }> { if (!src || typeof window === "undefined") { return Promise.resolve(fallback); }
+const cached = skinColorCache.get(src); if (cached) return Promise.resolve(cached);
+return new Promise((resolve) => { const image = new window.Image(); image.crossOrigin = "anonymous";
+image.onload = () => {
+  try {
+    const size = 96;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+
+    const context = canvas.getContext("2d", {
+      willReadFrequently: true,
+    });
+
+    if (!context) {
+      resolve(fallback);
+      return;
+    }
+
+    const scale = Math.min(
+      size / image.naturalWidth,
+      size / image.naturalHeight
+    );
+
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+
+    context.clearRect(0, 0, size, size);
+    context.drawImage(
+      image,
+      (size - width) / 2,
+      (size - height) / 2,
+      width,
+      height
+    );
+
+    const pixels = context.getImageData(0, 0, size, size).data;
+
+    const buckets = new Map<
+      string,
+      {
+        r: number;
+        g: number;
+        b: number;
+        count: number;
+        saturation: number;
+      }
+    >();
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      const alpha = pixels[i + 3];
+
+      if (alpha < 80) continue;
+
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const saturation = max === 0 ? 0 : (max - min) / max;
+      const brightness = (r + g + b) / 3;
+
+      if (
+        brightness > 245 ||
+        brightness < 18 ||
+        saturation < 0.18
+      ) {
+        continue;
+      }
+
+      const step = 32;
+      const key =
+        Math.floor(r / step) * step +
+        "," +
+        Math.floor(g / step) * step +
+        "," +
+        Math.floor(b / step) * step;
+
+      const current = buckets.get(key);
+
+      if (current) {
+        current.r += r;
+        current.g += g;
+        current.b += b;
+        current.count += 1;
+        current.saturation += saturation;
+      } else {
+        buckets.set(key, {
+          r,
+          g,
+          b,
+          count: 1,
+          saturation,
+        });
+      }
+    }
+
+    let winner:
+      | {
+          r: number;
+          g: number;
+          b: number;
+          count: number;
+          saturation: number;
+        }
+      | undefined;
+
+    let winnerScore = -1;
+
+    for (const bucket of buckets.values()) {
+      const score =
+        bucket.count *
+        (1 + (bucket.saturation / bucket.count) * 2);
+
+      if (score > winnerScore) {
+        winner = bucket;
+        winnerScore = score;
+      }
+    }
+
+    if (!winner) {
+      skinColorCache.set(src, fallback);
+      resolve(fallback);
+      return;
+    }
+
+    const r = winner.r / winner.count;
+    const g = winner.g / winner.count;
+    const b = winner.b / winner.count;
+
+    const color = {
+      hex: rgbToHex(r, g, b),
+      rgb:
+        Math.round(r) +
+        "," +
+        Math.round(g) +
+        "," +
+        Math.round(b),
+    };
+
+    skinColorCache.set(src, color);
+    resolve(color);
+  } catch {
+    skinColorCache.set(src, fallback);
+    resolve(fallback);
+  }
+};
+
+image.onerror = () => {
+  skinColorCache.set(src, fallback);
+  resolve(fallback);
+};
+
+image.src = src;}); }
 export default function UpgradePage() {
   const [inventory, setInventory] = useState<Item[]>([]); const [targets, setTargets] = useState<Item[]>([]); const [balance, setBalance] = useState(0); const [inputId, setInputId] = useState(""); const [targetId, setTargetId] = useState(""); const [topUp, setTopUp] = useState(0); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [spinning, setSpinning] = useState(false); const [angle, setAngle] = useState(0); const [error, setError] = useState(""); const [attempt, setAttempt] = useState<Attempt | null>(null); const [result, setResult] = useState<Result | null>(null); const [animating, setAnimating] = useState(false); const [particles, setParticles] = useState<Particle[]>([]); const [phase, setPhase] = useState<Phase>("idle"); const [optimisticInput, setOptimisticInput] = useState<Item | null>(null);
   const inventoryInput = inventory.find((x) => x.id === inputId) || null; const input = optimisticInput && inputId === optimisticInput.id ? optimisticInput : inventoryInput; const target = targets.find((x) => x.id === targetId) || null; const total = (input?.price || 0) + topUp; const chance = target && total > 0 ? chanceFor(total, target.price) : MIN_CHANCE; const shownChance = attempt?.chance ?? chance; const winDegrees = Math.max(90, Math.min(360, shownChance * 3.6)); const displayInput = attempt?.input ?? input; const displayTarget = attempt?.target ?? target;
@@ -66,6 +222,6 @@ export default function UpgradePage() {
 
 function WeaponSlot({ item, side, onShuffle, imageHidden, fragmentItem, fragmentMode, particles }: { item: Item | null; side: "left" | "right"; onShuffle: () => void; imageHidden: boolean; fragmentItem: Item | null; fragmentMode: FragmentMode; particles: Particle[] }) { return <div className="relative z-10 flex flex-col items-center justify-center gap-3 text-center"><p className="text-[9px] font-black uppercase tracking-[.18em] text-zinc-500 sm:text-xs">{side === "left" ? "ТВОЙ СКИН" : "ЦЕЛЕВОЙ СКИН"}</p><div className="relative h-20 w-full max-w-[180px] overflow-visible rounded-2xl border border-violet-400/15 bg-[#111424] p-3 shadow-[0_0_30px_rgba(95,48,255,.10)] sm:h-32 sm:max-w-[250px]">{item ? <Image src={item.image} alt={item.name} fill className={`object-contain p-3 drop-shadow-[0_0_20px_rgba(116,65,255,.45)] transition-opacity duration-150 ${imageHidden ? "opacity-0" : "opacity-100"}`} unoptimized /> : <div className="grid h-full place-items-center text-[9px] font-black uppercase tracking-[.14em] text-zinc-600">Выбери предмет</div>}{fragmentItem && fragmentMode && particles.length > 0 && <SkinFragments item={fragmentItem} particles={particles} mode={fragmentMode} />}</div><button type="button" onClick={onShuffle} aria-label="Сбросить выбор" disabled={imageHidden} className="grid h-9 w-9 place-items-center rounded-xl border border-violet-400/15 bg-[#171a2b] text-lg text-violet-200 transition hover:bg-violet-500/15 disabled:opacity-50 sm:h-11 sm:w-11">⌘</button>{item ? <div className="max-w-[180px]"><p className="truncate text-[10px] font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p></div> : side === "left" ? <p className="text-[9px] text-zinc-600">Можно играть балансом</p> : null}</div>; }
 
-function SkinFragments({ item, particles, mode }: { item: Item; particles: Particle[]; mode: Exclude<FragmentMode, null> }) { const safeImage = item.image.replace(/"/g, "%22"); const width = 200; const height = 130; const glow = rarityGlow(item.rarity); return <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">{particles.map((p) => { const cropX = -(p.sourceX / 100) * width; const cropY = -(p.sourceY / 100) * height; const style: CSSProperties & Record<string,string> = { width:`${p.size}px`, height:`${Math.max(12,p.size*.72)}px`, left:`calc(${p.sourceX}% - ${p.size/2}px)`, top:`calc(${p.sourceY}% - ${p.size*.36}px)`, backgroundImage:`url("${safeImage}")`, backgroundSize:`${width}px ${height}px`, backgroundRepeat:"no-repeat", backgroundPosition:`${cropX}px ${cropY}px`, animationDelay:`${p.delay}ms`, "--x":`${mode === "gather" ? -p.x : p.x}px`, "--y":`${mode === "gather" ? -p.y : p.y}px`, "--r":`${p.rotate}deg`, "--glow":glow.hex, "--glow-rgb":glow.rgb }; return <span key={`${item.id}-${mode}-${p.id}`} className={`upgrade-fragment ${mode === "gather" ? "upgrade-fragment-gather" : "upgrade-fragment-burst"}`} style={style} />; })}<style jsx>{`.upgrade-fragment{position:absolute;display:block;border-radius:4px;box-shadow:0 0 14px rgba(var(--glow-rgb),.52),0 0 30px rgba(var(--glow-rgb),.24),0 0 2px var(--glow);will-change:transform,opacity,filter;opacity:0;border:1px solid rgba(var(--glow-rgb),.32)}.upgrade-fragment-burst{animation:upgradeBurst ${BURST_MS}ms cubic-bezier(.12,.72,.16,1) forwards}.upgrade-fragment-gather{animation:upgradeGather ${GATHER_MS}ms cubic-bezier(.16,.78,.18,1) forwards}@keyframes upgradeBurst{0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.35) saturate(1.12)}8%{opacity:1}48%{opacity:1;filter:brightness(1.08) saturate(1.08)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.55);filter:brightness(.65) saturate(.9)}}@keyframes upgradeGather{0%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.48);filter:brightness(.7) saturate(.9)}12%{opacity:1}68%{opacity:1;filter:brightness(1.16) saturate(1.1)}100%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.7) saturate(1.25)}}`}</style></div>; }
+function SkinFragments({ item, particles, mode }: { item: Item; particles: Particle[]; mode: Exclude<FragmentMode, null> }) { const safeImage = item.image.replace(/\"/g, "%22"); const width = 200; const height = 130; const fallbackGlow = rarityGlow(item.rarity); const [glow, setGlow] = useState(fallbackGlow); useEffect(() => { let cancelled = false; setGlow(fallbackGlow); void extractSkinColor(item.image, fallbackGlow).then((color) => { if (!cancelled) setGlow(color); }); return () => { cancelled = true; }; }, [item.image, item.rarity]); return <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">{particles.map((p) => { const cropX = -(p.sourceX / 100) * width; const cropY = -(p.sourceY / 100) * height; const style: CSSProperties & Record<string,string> = { width:`${p.size}px`, height:`${Math.max(12,p.size*.72)}px`, left:`calc(${p.sourceX}% - ${p.size/2}px)`, top:`calc(${p.sourceY}% - ${p.size*.36}px)`, backgroundImage:`url("${safeImage}")`, backgroundSize:`${width}px ${height}px`, backgroundRepeat:"no-repeat", backgroundPosition:`${cropX}px ${cropY}px`, animationDelay:`${p.delay}ms`, "--x":`${mode === "gather" ? -p.x : p.x}px`, "--y":`${mode === "gather" ? -p.y : p.y}px`, "--r":`${p.rotate}deg`, "--glow":glow.hex, "--glow-rgb":glow.rgb }; return <span key={`${item.id}-${mode}-${p.id}`} className={`upgrade-fragment ${mode === "gather" ? "upgrade-fragment-gather" : "upgrade-fragment-burst"}`} style={style} />; })}<style jsx>{`.upgrade-fragment{position:absolute;display:block;border-radius:4px;box-shadow:0 0 14px rgba(var(--glow-rgb),.52),0 0 30px rgba(var(--glow-rgb),.24),0 0 2px var(--glow);will-change:transform,opacity,filter;opacity:0;border:1px solid rgba(var(--glow-rgb),.32)}.upgrade-fragment-burst{animation:upgradeBurst ${BURST_MS}ms cubic-bezier(.12,.72,.16,1) forwards}.upgrade-fragment-gather{animation:upgradeGather ${GATHER_MS}ms cubic-bezier(.16,.78,.18,1) forwards}@keyframes upgradeBurst{0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.35) saturate(1.12)}8%{opacity:1}48%{opacity:1;filter:brightness(1.08) saturate(1.08)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.55);filter:brightness(.65) saturate(.9)}}@keyframes upgradeGather{0%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.48);filter:brightness(.7) saturate(.9)}12%{opacity:1}68%{opacity:1;filter:brightness(1.16) saturate(1.1)}100%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.7) saturate(1.25)}}`}</style></div>; }
 
 function InventoryPanel({ title, empty, items, active, onPick }: { title: string; empty: string; items: Item[]; active: string; onPick: (id: string) => void }) { return <section className="rounded-[24px] border border-violet-400/10 bg-[#101322] p-4 shadow-[0_18px_60px_rgba(0,0,0,.16)] sm:p-5"><h2 className="mb-5 text-sm font-black uppercase tracking-[.16em] text-zinc-300 sm:text-lg">{title}</h2>{items.length === 0 ? <div className="rounded-xl border border-white/5 p-6 text-sm text-zinc-500">{empty}</div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{items.map((item) => <button key={item.id} type="button" onClick={() => onPick(item.id)} className={`rounded-2xl border p-3 text-left transition ${active === item.id ? "border-violet-400 bg-violet-500/10 shadow-[0_0_28px_rgba(108,58,255,.16)]" : "border-white/5 bg-[#0c0f1b] hover:border-violet-400/35"}`}><div className="relative mb-2 h-20"><Image src={item.image} alt={item.name} fill className="object-contain" unoptimized /></div><p className="truncate text-[8px] font-black uppercase tracking-wider text-violet-300/60">{item.rarity}</p><p className="truncate text-xs font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p></button>)}</div>}</section>; }
