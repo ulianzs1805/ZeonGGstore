@@ -8,6 +8,10 @@ export async function POST(request: Request) {
   const access = await requirePermission("FORCE_DROP");
   if (!access.user) return access.response;
 
+  // NPN1_DEV is the system owner role. This role intentionally has no Force Drop
+  // cooldown or pending-assignment cap, while all other roles remain protected.
+  const unlimitedForceDrop = access.user.role === "NPN1_DEV";
+
   try {
     const body = await request.json().catch(() => null);
     const targetUserId = typeof body?.targetUserId === "string" ? body.targetUserId : "";
@@ -37,22 +41,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Выбранный Drop принадлежит другому кейсу. Обновите список и выберите Drop заново." }, { status: 409 });
     }
 
-    const cooldownSince = new Date(Date.now() - FORCE_DROP_COOLDOWN_MS);
-    const recentAssignment = await prisma.forceDropAssignment.findFirst({
-      where: { targetUserId: target.id, createdAt: { gte: cooldownSince } },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    });
-    if (recentAssignment) {
-      const retryAt = new Date(recentAssignment.createdAt.getTime() + FORCE_DROP_COOLDOWN_MS);
-      return NextResponse.json({ error: "Для этого аккаунта Force Drop уже использовался. Повторно можно через 24 часа.", retryAt: retryAt.toISOString() }, { status: 429 });
-    }
+    if (!unlimitedForceDrop) {
+      const cooldownSince = new Date(Date.now() - FORCE_DROP_COOLDOWN_MS);
+      const recentAssignment = await prisma.forceDropAssignment.findFirst({
+        where: { targetUserId: target.id, createdAt: { gte: cooldownSince } },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      });
+      if (recentAssignment) {
+        const retryAt = new Date(recentAssignment.createdAt.getTime() + FORCE_DROP_COOLDOWN_MS);
+        return NextResponse.json({ error: "Для этого аккаунта Force Drop уже использовался. Повторно можно через 24 часа.", retryAt: retryAt.toISOString() }, { status: 429 });
+      }
 
-    const pending = await prisma.forceDropAssignment.findFirst({
-      where: { targetUserId: target.id, caseId: selectedCase.id, status: "PENDING" },
-      select: { id: true },
-    });
-    if (pending) return NextResponse.json({ error: "Для этого игрока и кейса уже есть ожидающий Force Drop." }, { status: 409 });
+      const pending = await prisma.forceDropAssignment.findFirst({
+        where: { targetUserId: target.id, caseId: selectedCase.id, status: "PENDING" },
+        select: { id: true },
+      });
+      if (pending) return NextResponse.json({ error: "Для этого игрока и кейса уже есть ожидающий Force Drop." }, { status: 409 });
+    }
 
     const assignment = await prisma.forceDropAssignment.create({
       data: {
@@ -70,11 +76,11 @@ export async function POST(request: Request) {
       action: "FORCE_DROP_ASSIGNED",
       targetType: "USER",
       targetId: target.id,
-      metadata: { assignmentId: assignment.id, caseId: selectedCase.id, dropId: drop.id, reason, targetEmail: target.email, probability: drop.probability },
+      metadata: { assignmentId: assignment.id, caseId: selectedCase.id, dropId: drop.id, reason, targetEmail: target.email, probability: drop.probability, unlimitedForceDrop },
       status: "SUCCESS",
     }).catch((auditError) => console.error("FORCE_DROP audit log failed", auditError));
 
-    return NextResponse.json({ assignment, message: "Drop назначен. Игрок получит его только после обычного открытия этого кейса." }, { status: 201 });
+    return NextResponse.json({ assignment, message: unlimitedForceDrop ? "Force Drop назначен без лимита NPN1_DEV." : "Drop назначен. Игрок получит его только после обычного открытия этого кейса." }, { status: 201 });
   } catch (error) {
     console.error("POST /api/admin/force-drop failed", error);
     const detail = error instanceof Error ? error.message : "Unknown server error";
