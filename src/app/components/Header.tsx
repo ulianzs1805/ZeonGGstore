@@ -82,7 +82,7 @@ export default function Header() {
       <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="group flex min-w-0 items-center gap-3" aria-label="ZeonGGStore — главная">
           <span className="relative flex h-12 w-[92px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-violet-300/30 bg-[#090d17] shadow-[0_0_20px_rgba(124,58,237,0.24)] transition duration-300 group-hover:scale-[1.02] group-hover:border-orange-300/40 sm:h-14 sm:w-[112px]">
-            <Image src="/ZeonGgstore-logo.png" alt="Логотип ZeonGGStore" width={224} height={112} priority className="h-full w-full object-contain p-1" />
+            <Image src="/AFED0327-AB02-4E23-9FCC-B94940A08A4C.png" alt="Логотип ZeonGGStore" width={224} height={112} priority className="h-full w-full object-contain p-1" />
           </span>
           <span className="hidden min-w-0 flex-col leading-none sm:flex">
             <span className="text-xl font-black tracking-[-0.08em] text-[#f4f1ff]">ZEON<span className="text-orange-300">GG</span></span>
