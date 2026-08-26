@@ -29,7 +29,9 @@ type Particle = {
 };
 
 const SPIN_MS = 4200;
-const BREAK_MS = 4700;
+const BURST_MS = 2850;
+const GATHER_MS = 2350;
+const BREAK_MS = BURST_MS + GATHER_MS + 450;
 const MIN_CHANCE = 25;
 const money = (v: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(v);
 const chanceFor = (input: number, target: number) => Math.max(MIN_CHANCE, Math.min(100, target > 0 ? (input / target) * 100 : MIN_CHANCE));
@@ -43,19 +45,19 @@ function makeParticles(seed: number) {
   const particles: Particle[] = [];
   let id = 0;
 
-  for (let row = 0; row < 6; row++) {
-    for (let col = 0; col < 10; col++) {
-      const jitterX = (next(id * 11 + 1) - 0.5) * 6;
-      const jitterY = (next(id * 11 + 2) - 0.5) * 7;
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 9; col++) {
+      const jitterX = (next(id * 11 + 1) - 0.5) * 5;
+      const jitterY = (next(id * 11 + 2) - 0.5) * 6;
       particles.push({
         id,
-        x: (next(id * 11 + 3) - 0.5) * (150 + next(id * 11 + 4) * 190),
-        y: (next(id * 11 + 5) - 0.5) * (110 + next(id * 11 + 6) * 165),
-        size: 15 + next(id * 11 + 7) * 18,
-        rotate: (next(id * 11 + 8) - 0.5) * 680,
+        x: (next(id * 11 + 3) - 0.5) * (165 + next(id * 11 + 4) * 210),
+        y: (next(id * 11 + 5) - 0.5) * (125 + next(id * 11 + 6) * 180),
+        size: 14 + next(id * 11 + 7) * 20,
+        rotate: (next(id * 11 + 8) - 0.5) * 720,
         delay: next(id * 11 + 9) * 180,
-        sourceX: 7 + col * 9.6 + jitterX,
-        sourceY: 11 + row * 14.5 + jitterY,
+        sourceX: 7 + col * 10.6 + jitterX,
+        sourceY: 8 + row * 12.8 + jitterY,
       });
       id++;
     }
@@ -90,7 +92,7 @@ export default function UpgradePage() {
   const winDegrees = Math.max(90, Math.min(360, shownChance * 3.6));
   const displayInput = attempt?.input ?? input;
   const displayTarget = attempt?.target ?? target;
-  const particlesReady = animating && particles.length > 0 && phase !== "idle";
+  const particlesReady = animating && particles.length > 0;
 
   async function load() {
     const r = await fetch("/api/upgrader", { cache: "no-store" });
@@ -160,21 +162,14 @@ export default function UpgradePage() {
   }
 
   async function playResult(data: Result) {
+    const nextParticles = makeParticles(Date.now());
     setResult(data);
-    setParticles([]);
-    setPhase("idle");
+    setParticles(nextParticles);
+    setPhase("burst");
     setAnimating(true);
 
-    // Сначала монтируем слой, затем в отдельном кадре запускаем сами фрагменты.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setParticles(makeParticles(Date.now()));
-        setPhase("burst");
-      });
-    });
-
     if (data.success) {
-      window.setTimeout(() => setPhase("gather"), 2150);
+      window.setTimeout(() => setPhase("gather"), BURST_MS);
     }
 
     window.setTimeout(async () => {
@@ -197,7 +192,7 @@ export default function UpgradePage() {
         setPhase("idle");
         setAnimating(false);
       }
-    }, BREAK_MS);
+    }, data.success ? BREAK_MS : BURST_MS + 350);
   }
 
   async function upgrade() {
@@ -241,9 +236,7 @@ export default function UpgradePage() {
     });
   }, [targets, total]);
 
-  if (loading) {
-    return <main className="min-h-screen bg-[#090b16] p-8 text-center text-zinc-400">Загружаем апгрейдер...</main>;
-  }
+  if (loading) return <main className="min-h-screen bg-[#090b16] p-8 text-center text-zinc-400">Загружаем апгрейдер...</main>;
 
   return <main className="min-h-screen bg-[#090b16] pb-24 text-white">
     <div className="mx-auto max-w-[1280px] overflow-hidden">
@@ -251,43 +244,22 @@ export default function UpgradePage() {
         <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[linear-gradient(120deg,transparent,rgba(115,53,255,.05),transparent)]" />
 
         <div className="relative mb-6 flex items-center justify-between gap-4 rounded-2xl border border-violet-400/10 bg-[#0e1120]/90 px-5 py-4 shadow-[0_16px_60px_rgba(0,0,0,.22)]">
-          <div>
-            <p className="text-[9px] font-black tracking-[.34em] text-violet-300">ZEONGGSTORE</p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Апгрейдер</h1>
-          </div>
-          <div className="text-right">
-            <p className="text-[8px] font-black tracking-[.22em] text-zinc-500">БАЛАНС</p>
-            <p className="mt-1 font-black text-[#f2b84d]">{money(balance)} Z</p>
-          </div>
+          <div><p className="text-[9px] font-black tracking-[.34em] text-violet-300">ZEONGGSTORE</p><h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Апгрейдер</h1></div>
+          <div className="text-right"><p className="text-[8px] font-black tracking-[.22em] text-zinc-500">БАЛАНС</p><p className="mt-1 font-black text-[#f2b84d]">{money(balance)} Z</p></div>
         </div>
 
         <div className="relative grid min-h-[300px] grid-cols-[.9fr_1.25fr_.9fr] items-center gap-2 sm:min-h-[470px] sm:gap-8">
-          <WeaponSlot
-            item={displayInput}
-            side="left"
-            onShuffle={() => setInputId("")}
-            hidden={particlesReady && phase === "burst"}
-          />
+          <WeaponSlot item={displayInput} side="left" onShuffle={() => setInputId("")} hidden={animating} />
 
           <div className="relative z-10 mx-auto flex w-full max-w-[460px] flex-col items-center">
             <div className="relative h-[250px] w-[250px] sm:h-[390px] sm:w-[390px]">
-              <div
-                className="absolute inset-[7%] rounded-full border-[8px] border-[#261a4b] bg-[#0b0d18] shadow-[0_0_42px_rgba(111,51,255,.22)]"
-                style={{ background: `conic-gradient(from 0deg,#ff8a2a 0deg ${winDegrees}deg,#7a3cf2 ${winDegrees}deg 360deg)` }}
-              >
+              <div className="absolute inset-[7%] rounded-full border-[8px] border-[#261a4b] bg-[#0b0d18] shadow-[0_0_42px_rgba(111,51,255,.22)]" style={{ background: `conic-gradient(from 0deg,#ff8a2a 0deg ${winDegrees}deg,#7a3cf2 ${winDegrees}deg 360deg)` }}>
                 <div className="absolute inset-[8px] rounded-full bg-[#0d0f1c] shadow-[inset_0_0_38px_rgba(0,0,0,.48)]">
                   <div className="absolute inset-x-0 top-[18%] text-center text-[9px] font-black tracking-[.25em] text-[#b8a5ff]">ШАНС</div>
                   <div className="absolute inset-x-0 top-[31%] text-center text-4xl font-black sm:text-6xl">{shownChance.toFixed(1)}%</div>
                   <div className="absolute inset-x-0 bottom-[17%] text-center text-[9px] font-black tracking-[.24em] text-zinc-500">WIN / LOSE</div>
                 </div>
-                <div
-                  className="absolute left-1/2 top-[-10px] z-30 h-[calc(100%+20px)] w-1 -translate-x-1/2"
-                  style={{
-                    transform: `translateX(-50%) rotate(${angle}deg)`,
-                    transformOrigin: "50% 50%",
-                    transition: spinning ? `transform ${SPIN_MS}ms cubic-bezier(.08,.72,.12,1)` : "transform .25s ease-out",
-                  }}
-                >
+                <div className="absolute left-1/2 top-[-10px] z-30 h-[calc(100%+20px)] w-1 -translate-x-1/2" style={{ transform: `translateX(-50%) rotate(${angle}deg)`, transformOrigin: "50% 50%", transition: spinning ? `transform ${SPIN_MS}ms cubic-bezier(.08,.72,.12,1)` : "transform .25s ease-out" }}>
                   <div className="absolute left-1/2 top-0 h-12 w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,.8)]" />
                 </div>
               </div>
@@ -295,63 +267,23 @@ export default function UpgradePage() {
             <p className="mt-3 text-center text-[10px] font-black uppercase tracking-[.42em] text-violet-300/55">ZeonGG Upgrade</p>
           </div>
 
-          <WeaponSlot
-            item={displayTarget}
-            side="right"
-            onShuffle={() => setTargetId("")}
-            hidden={particlesReady && phase === "burst"}
-          />
+          <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} hidden={animating} />
 
-          {particlesReady && attempt && result && (
-            <ParticleAnimation
-              success={result.success}
-              target={attempt.target}
-              input={attempt.input}
-              particles={particles}
-              phase={phase}
-            />
-          )}
+          {particlesReady && attempt && result && <ParticleAnimation success={result.success} target={attempt.target} input={attempt.input} particles={particles} phase={phase} />}
         </div>
 
         <div className="relative z-20 mx-auto mt-7 max-w-5xl rounded-[24px] border border-violet-400/10 bg-[#0e1120]/70 p-4 shadow-[0_22px_80px_rgba(0,0,0,.18)] sm:p-6">
-          <div className="mb-3 flex items-center justify-between text-sm font-black text-zinc-300 sm:text-lg">
-            <span>Добавить баланс</span>
-            <span className="text-[#f2b84d]">{money(topUp)} Z</span>
-          </div>
-          <div className="rounded-2xl border border-white/5 bg-[#151827] px-4 py-4">
-            <input
-              type="range"
-              min="0"
-              max={Math.max(0, Math.floor(balance * 100) / 100)}
-              step="0.01"
-              value={topUp}
-              onChange={(e) => setTopUp(Math.max(0, Math.min(balance, Number(e.target.value))))}
-              disabled={spinning || busy || animating}
-              className="h-3 w-full accent-[#7b46ff]"
-            />
-          </div>
+          <div className="mb-3 flex items-center justify-between text-sm font-black text-zinc-300 sm:text-lg"><span>Добавить баланс</span><span className="text-[#f2b84d]">{money(topUp)} Z</span></div>
+          <div className="rounded-2xl border border-white/5 bg-[#151827] px-4 py-4"><input type="range" min="0" max={Math.max(0, Math.floor(balance * 100) / 100)} step="0.01" value={topUp} onChange={(e) => setTopUp(Math.max(0, Math.min(balance, Number(e.target.value))))} disabled={spinning || busy || animating} className="h-3 w-full accent-[#7b46ff]" /></div>
           <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-2xl border border-violet-400/10 bg-[#121525] text-xs font-black sm:text-sm">
             <button type="button" onClick={() => setTopUp(0)} className="min-h-14 border-r border-violet-400/10 text-[#ff9b43]">ϟ</button>
-            {[30, 50, 70].map((p) => (
-              <button key={p} type="button" onClick={() => setChancePreset(p)} className="min-h-14 border-r border-violet-400/10 transition hover:bg-violet-500/10">{p}%</button>
-            ))}
-            {[2, 5, 10].map((m) => (
-              <button key={m} type="button" onClick={() => chooseMultiplier(m)} className="min-h-14 border-r border-violet-400/10 last:border-r-0 transition hover:bg-orange-400/10">X{m}</button>
-            ))}
+            {[30, 50, 70].map((p) => <button key={p} type="button" onClick={() => setChancePreset(p)} className="min-h-14 border-r border-violet-400/10 transition hover:bg-violet-500/10">{p}%</button>)}
+            {[2, 5, 10].map((m) => <button key={m} type="button" onClick={() => chooseMultiplier(m)} className="min-h-14 border-r border-violet-400/10 last:border-r-0 transition hover:bg-orange-400/10">X{m}</button>)}
           </div>
-          <button
-            type="button"
-            onClick={() => void upgrade()}
-            disabled={!target || total <= 0 || target.price <= total || topUp > balance || busy || spinning || animating}
-            className="mt-5 w-full rounded-2xl bg-[linear-gradient(90deg,#6730df,#9138f5,#ff7f2a)] py-5 text-base font-black tracking-[.16em] text-white shadow-[0_14px_40px_rgba(105,52,255,.24)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
-          >
+          <button type="button" onClick={() => void upgrade()} disabled={!target || total <= 0 || target.price <= total || topUp > balance || busy || spinning || animating} className="mt-5 w-full rounded-2xl bg-[linear-gradient(90deg,#6730df,#9138f5,#ff7f2a)] py-5 text-base font-black tracking-[.16em] text-white shadow-[0_14px_40px_rgba(105,52,255,.24)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45">
             {animating ? "АНИМАЦИЯ..." : spinning ? "АПГРЕЙД ИДЁТ..." : busy ? "ОБРАБОТКА..." : "СДЕЛАТЬ АПГРЕЙД"}
           </button>
-          {result && !animating && (
-            <div className={`mt-4 rounded-xl p-3 text-center text-sm font-black ${result.success ? "border border-emerald-400/25 bg-emerald-500/10 text-emerald-300" : "border border-red-400/25 bg-red-500/10 text-red-300"}`}>
-              {result.success ? "УСПЕШНЫЙ АПГРЕЙД" : "АПГРЕЙД НЕ УДАЛСЯ"}
-            </div>
-          )}
+          {result && !animating && <div className={`mt-4 rounded-xl p-3 text-center text-sm font-black ${result.success ? "border border-emerald-400/25 bg-emerald-500/10 text-emerald-300" : "border border-red-400/25 bg-red-500/10 text-red-300"}`}>{result.success ? "УСПЕШНЫЙ АПГРЕЙД" : "АПГРЕЙД НЕ УДАЛСЯ"}</div>}
           {error && <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-center text-sm text-red-200">{error}</div>}
         </div>
       </section>
@@ -364,147 +296,83 @@ export default function UpgradePage() {
   </main>;
 }
 
-function WeaponSlot({ item, side, onShuffle, hidden }: {
-  item: Item | null;
-  side: "left" | "right";
-  onShuffle: () => void;
-  hidden?: boolean;
-}) {
-  return (
-    <div className={`relative z-10 flex flex-col items-center justify-center gap-3 text-center transition-all duration-500 ${hidden ? "scale-95 opacity-0" : "scale-100 opacity-100"}`}>
-      <p className="text-[9px] font-black uppercase tracking-[.18em] text-zinc-500 sm:text-xs">{side === "left" ? "ТВОЙ СКИН" : "ЦЕЛЕВОЙ СКИН"}</p>
-      <div className="relative h-20 w-full max-w-[180px] rounded-2xl border border-violet-400/15 bg-[#111424] p-3 shadow-[0_0_30px_rgba(95,48,255,.10)] sm:h-32 sm:max-w-[250px]">
-        {item ? (
-          <Image src={item.image} alt={item.name} fill className="object-contain p-3 drop-shadow-[0_0_20px_rgba(116,65,255,.45)]" unoptimized />
-        ) : (
-          <div className="grid h-full place-items-center text-[9px] font-black uppercase tracking-[.14em] text-zinc-600">Выбери предмет</div>
-        )}
-      </div>
-      <button type="button" onClick={onShuffle} aria-label="Сбросить выбор" className="grid h-9 w-9 place-items-center rounded-xl border border-violet-400/15 bg-[#171a2b] text-lg text-violet-200 transition hover:bg-violet-500/15 sm:h-11 sm:w-11">⌘</button>
-      {item ? (
-        <div className="max-w-[180px]">
-          <p className="truncate text-[10px] font-black sm:text-sm">{item.name}</p>
-          <p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p>
-        </div>
-      ) : side === "left" ? <p className="text-[9px] text-zinc-600">Можно играть балансом</p> : null}
+function WeaponSlot({ item, side, onShuffle, hidden }: { item: Item | null; side: "left" | "right"; onShuffle: () => void; hidden?: boolean }) {
+  return <div className={`relative z-10 flex flex-col items-center justify-center gap-3 text-center transition-all duration-500 ${hidden ? "scale-95 opacity-0" : "scale-100 opacity-100"}`}>
+    <p className="text-[9px] font-black uppercase tracking-[.18em] text-zinc-500 sm:text-xs">{side === "left" ? "ТВОЙ СКИН" : "ЦЕЛЕВОЙ СКИН"}</p>
+    <div className="relative h-20 w-full max-w-[180px] rounded-2xl border border-violet-400/15 bg-[#111424] p-3 shadow-[0_0_30px_rgba(95,48,255,.10)] sm:h-32 sm:max-w-[250px]">
+      {item ? <Image src={item.image} alt={item.name} fill className="object-contain p-3 drop-shadow-[0_0_20px_rgba(116,65,255,.45)]" unoptimized /> : <div className="grid h-full place-items-center text-[9px] font-black uppercase tracking-[.14em] text-zinc-600">Выбери предмет</div>}
     </div>
-  );
+    <button type="button" onClick={onShuffle} aria-label="Сбросить выбор" className="grid h-9 w-9 place-items-center rounded-xl border border-violet-400/15 bg-[#171a2b] text-lg text-violet-200 transition hover:bg-violet-500/15 sm:h-11 sm:w-11">⌘</button>
+    {item ? <div className="max-w-[180px]"><p className="truncate text-[10px] font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p></div> : side === "left" ? <p className="text-[9px] text-zinc-600">Можно играть балансом</p> : null}
+  </div>;
 }
 
-function ParticleAnimation({ success, target, input, particles, phase }: {
-  success: boolean;
-  target: Item;
-  input: Item | null;
-  particles: Particle[];
-  phase: Phase;
-}) {
+function ParticleAnimation({ success, target, input, particles, phase }: { success: boolean; target: Item; input: Item | null; particles: Particle[]; phase: Phase }) {
   const source = (item: Item | null, side: "left" | "right", gather = false) => {
     if (!item?.image) return null;
     const safeImage = item.image.replace(/"/g, "%22");
+    const width = 200;
+    const height = 130;
 
-    return (
-      <div className={`pointer-events-none absolute top-1/2 z-40 h-[118px] w-[180px] -translate-y-1/2 sm:h-[150px] sm:w-[250px] ${side === "left" ? "left-0 sm:left-[2%]" : "right-0 sm:right-[2%]"}`}>
-        {particles.map((p) => (
-          <span
-            key={`${side}-${gather ? "g" : "b"}-${p.id}`}
-            className={`upgrade-fragment ${gather ? "upgrade-fragment-gather" : "upgrade-fragment-burst"}`}
-            style={{
-              width: `${p.size}px`,
-              height: `${Math.max(12, p.size * 0.74)}px`,
-              left: `${p.sourceX}%`,
-              top: `${p.sourceY}%`,
-              backgroundImage: `url("${safeImage}")`,
-              backgroundSize: "100% 100%",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: `${p.sourceX}% ${p.sourceY}%`,
-              ["--x" as string]: `${gather ? -p.x : p.x}px`,
-              ["--y" as string]: `${gather ? -p.y : p.y}px`,
-              ["--r" as string]: `${p.rotate}deg`,
-              animationDelay: `${p.delay}ms`,
-            } as React.CSSProperties}
-          />
-        ))}
-      </div>
-    );
+    return <div className={`pointer-events-none absolute top-1/2 z-40 h-[130px] w-[200px] -translate-y-1/2 sm:h-[150px] sm:w-[230px] ${side === "left" ? "left-0 sm:left-[2%]" : "right-0 sm:right-[2%]"}`}>
+      {particles.map((p) => {
+        const cropX = -(p.sourceX / 100) * width;
+        const cropY = -(p.sourceY / 100) * height;
+        return <span key={`${side}-${gather ? "g" : "b"}-${p.id}`} className={`upgrade-fragment ${gather ? "upgrade-fragment-gather" : "upgrade-fragment-burst"}`} style={{
+          width: `${p.size}px`,
+          height: `${Math.max(12, p.size * 0.72)}px`,
+          left: `calc(${p.sourceX}% - ${p.size / 2}px)`,
+          top: `calc(${p.sourceY}% - ${p.size * 0.36}px)`,
+          backgroundImage: `url("${safeImage}")`,
+          backgroundSize: `${width}px ${height}px`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: `${cropX}px ${cropY}px`,
+          ["--x" as string]: `${gather ? -p.x : p.x}px`,
+          ["--y" as string]: `${gather ? -p.y : p.y}px`,
+          ["--r" as string]: `${p.rotate}deg`,
+          animationDelay: `${p.delay}ms`,
+        } as React.CSSProperties} />;
+      })}
+    </div>;
   };
 
-  return (
-    <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
-      {success ? (
-        <>
-          {phase === "burst" && source(target, "right")}
-          {phase === "gather" && source(target, "left", true)}
-        </>
-      ) : (
-        <>
-          {source(input, "left")}
-          {source(target, "right")}
-        </>
-      )}
-
-      <style jsx>{`
-        .upgrade-fragment {
-          position: absolute;
-          display: block;
-          border-radius: 5px;
-          box-shadow: 0 0 14px rgba(255, 135, 45, .22), 0 0 24px rgba(118, 65, 255, .22);
-          will-change: transform, opacity, filter;
-          opacity: 0;
-        }
-        .upgrade-fragment-burst {
-          animation: upgradeBurst 2.85s cubic-bezier(.12,.72,.16,1) forwards;
-        }
-        .upgrade-fragment-gather {
-          animation: upgradeGather 2.35s cubic-bezier(.16,.78,.18,1) forwards;
-        }
-        @keyframes upgradeBurst {
-          0% { opacity: 0; transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(.95); filter: brightness(1.35); }
-          8% { opacity: 1; }
-          42% { opacity: 1; filter: brightness(1.15); }
-          100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x), var(--y)) rotate(var(--r)) scale(.52); filter: brightness(.72); }
-        }
-        @keyframes upgradeGather {
-          0% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x), var(--y)) rotate(var(--r)) scale(.45); filter: brightness(.8); }
-          12% { opacity: 1; }
-          66% { opacity: 1; filter: brightness(1.18); }
-          100% { opacity: 0; transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1); filter: brightness(1.65); }
-        }
-      `}</style>
-    </div>
-  );
+  return <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
+    {success ? <>
+      {phase === "burst" && source(input, "left")}
+      {phase === "burst" && source(target, "right")}
+      {phase === "gather" && source(target, "left", true)}
+    </> : <>
+      {source(input, "left")}
+      {source(target, "right")}
+    </>}
+    <style jsx>{`
+      .upgrade-fragment { position:absolute; display:block; border-radius:4px; box-shadow:0 0 14px rgba(255,135,45,.28),0 0 24px rgba(118,65,255,.22); will-change:transform,opacity,filter; opacity:0; }
+      .upgrade-fragment-burst { animation:upgradeBurst ${BURST_MS}ms cubic-bezier(.12,.72,.16,1) forwards; }
+      .upgrade-fragment-gather { animation:upgradeGather ${GATHER_MS}ms cubic-bezier(.16,.78,.18,1) forwards; }
+      @keyframes upgradeBurst {
+        0% { opacity:0; transform:translate(0,0) rotate(0deg) scale(1); filter:brightness(1.35) saturate(1.12); }
+        8% { opacity:1; }
+        48% { opacity:1; filter:brightness(1.08) saturate(1.08); }
+        100% { opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.55); filter:brightness(.65) saturate(.9); }
+      }
+      @keyframes upgradeGather {
+        0% { opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.48); filter:brightness(.7) saturate(.9); }
+        12% { opacity:1; }
+        68% { opacity:1; filter:brightness(1.16) saturate(1.1); }
+        100% { opacity:0; transform:translate(0,0) rotate(0deg) scale(1); filter:brightness(1.7) saturate(1.25); }
+      }
+    `}</style>
+  </div>;
 }
 
-function InventoryPanel({ title, empty, items, active, onPick }: {
-  title: string;
-  empty: string;
-  items: Item[];
-  active: string;
-  onPick: (id: string) => void;
-}) {
-  return (
-    <section className="rounded-[24px] border border-violet-400/10 bg-[#101322] p-4 shadow-[0_18px_60px_rgba(0,0,0,.16)] sm:p-5">
-      <h2 className="mb-5 text-sm font-black uppercase tracking-[.16em] text-zinc-300 sm:text-lg">{title}</h2>
-      {items.length === 0 ? (
-        <div className="rounded-xl border border-white/5 p-6 text-sm text-zinc-500">{empty}</div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onPick(item.id)}
-              className={`rounded-2xl border p-3 text-left transition ${active === item.id ? "border-violet-400 bg-violet-500/10 shadow-[0_0_28px_rgba(108,58,255,.16)]" : "border-white/5 bg-[#0c0f1b] hover:border-violet-400/35"}`}
-            >
-              <div className="relative mb-2 h-20">
-                <Image src={item.image} alt={item.name} fill className="object-contain" unoptimized />
-              </div>
-              <p className="truncate text-[8px] font-black uppercase tracking-wider text-violet-300/60">{item.rarity}</p>
-              <p className="truncate text-xs font-black sm:text-sm">{item.name}</p>
-              <p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p>
-            </button>
-          ))}
-        </div>
-      )}
-    </section>
-  );
+function InventoryPanel({ title, empty, items, active, onPick }: { title: string; empty: string; items: Item[]; active: string; onPick: (id: string) => void }) {
+  return <section className="rounded-[24px] border border-violet-400/10 bg-[#101322] p-4 shadow-[0_18px_60px_rgba(0,0,0,.16)] sm:p-5">
+    <h2 className="mb-5 text-sm font-black uppercase tracking-[.16em] text-zinc-300 sm:text-lg">{title}</h2>
+    {items.length === 0 ? <div className="rounded-xl border border-white/5 p-6 text-sm text-zinc-500">{empty}</div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {items.map((item) => <button key={item.id} type="button" onClick={() => onPick(item.id)} className={`rounded-2xl border p-3 text-left transition ${active === item.id ? "border-violet-400 bg-violet-500/10 shadow-[0_0_28px_rgba(108,58,255,.16)]" : "border-white/5 bg-[#0c0f1b] hover:border-violet-400/35"}`}>
+        <div className="relative mb-2 h-20"><Image src={item.image} alt={item.name} fill className="object-contain" unoptimized /></div>
+        <p className="truncate text-[8px] font-black uppercase tracking-wider text-violet-300/60">{item.rarity}</p><p className="truncate text-xs font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p>
+      </button>)}
+    </div>}
+  </section>;
 }
