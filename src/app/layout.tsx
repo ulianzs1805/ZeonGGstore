@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "ZeonGGStore",
     description: "Кейсы, дропы и апгрейд скинов.",
-    images: [{ url: "/zeongg-logo.webp", width: 128, height: 128, alt: "ZeonGGStore" }],
+    images: [{ url: "/ZeonGgstore-logo.png", width: 128, height: 128, alt: "ZeonGGStore" }],
   },
 };
 
