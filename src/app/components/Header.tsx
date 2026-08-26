@@ -80,9 +80,14 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#070b11]/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-xl font-black tracking-[-0.08em] text-[#f4f1ff]">ZEON</span>
-          <span className="text-[0.62rem] font-black tracking-[0.34em] text-violet-300/90">GGSTORE</span>
+        <Link href="/" className="group flex min-w-0 items-center gap-2.5" aria-label="ZeonGGStore — главная">
+          <span className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-violet-300/30 bg-[#090d17] shadow-[0_0_20px_rgba(124,58,237,0.24)] transition duration-300 group-hover:scale-[1.04] group-hover:border-orange-300/40">
+            <Image src="/zeongg-logo.webp" alt="Логотип ZeonGGStore" width={128} height={128} priority className="h-full w-full object-cover" />
+          </span>
+          <span className="flex min-w-0 flex-col leading-none">
+            <span className="text-xl font-black tracking-[-0.08em] text-[#f4f1ff]">ZEON<span className="text-orange-300">GG</span></span>
+            <span className="mt-1 text-[0.56rem] font-black tracking-[0.38em] text-violet-300/90">STORE</span>
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-7 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-slate-300 md:flex">
