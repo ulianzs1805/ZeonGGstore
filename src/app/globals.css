@@ -53,3 +53,22 @@ img {
 .grid.grid-cols-\[\.9fr_1\.25fr_\.9fr\] > .flex {
   width: 100%;
 }
+
+/* Homepage hero: crop the existing artwork to the two agents only and bring them forward. */
+[class*="bg-[url('/zeongg-logo.webp')]"] {
+  width: 60% !important;
+  right: -1% !important;
+  background-size: 180% auto !important;
+  background-position: 76% 54% !important;
+  opacity: 1 !important;
+  filter: drop-shadow(-18px 0 34px rgba(124, 58, 237, 0.28)) drop-shadow(16px 0 34px rgba(255, 132, 43, 0.18));
+}
+
+@media (max-width: 640px) {
+  [class*="bg-[url('/zeongg-logo.webp')]"] {
+    width: 92% !important;
+    right: -18% !important;
+    background-size: 165% auto !important;
+    background-position: 74% 52% !important;
+  }
+}
