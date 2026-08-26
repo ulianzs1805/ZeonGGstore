@@ -3,6 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import AppChrome from "./components/layout/AppChrome";
 
+const LOGO_PATH = "/AFED0327-AB02-4E23-9FCC-B94940A08A4C.png";
+
 export const metadata: Metadata = {
   title: {
     default: "ZeonGGStore",
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "ZeonGGStore",
     description: "Кейсы, дропы и апгрейд скинов.",
-    images: [{ url: "/ZeonGgstore-logo.png", width: 128, height: 128, alt: "ZeonGGStore" }],
+    images: [{ url: LOGO_PATH, width: 128, height: 128, alt: "ZeonGGStore" }],
   },
 };
 
