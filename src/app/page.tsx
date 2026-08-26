@@ -86,15 +86,15 @@ export default function Home() {
             <RecentDropsStrip title="Последние дропы" />
           </div>
 
-          <div className="relative isolate min-h-[860px] overflow-hidden bg-[radial-gradient(circle_at_12%_18%,rgba(124,58,237,0.20),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(255,132,43,0.16),transparent_28%),radial-gradient(circle_at_82%_70%,rgba(139,92,246,0.18),transparent_34%),linear-gradient(90deg,#090d18_0%,#090d18_48%,rgba(9,13,24,0.45)_100%)] sm:min-h-[760px] lg:min-h-[690px]">
+          <div className="relative isolate min-h-[700px] overflow-hidden bg-[radial-gradient(circle_at_12%_18%,rgba(124,58,237,0.20),transparent_30%),radial-gradient(circle_at_88%_18%,rgba(255,132,43,0.16),transparent_28%),radial-gradient(circle_at_82%_70%,rgba(139,92,246,0.18),transparent_34%),linear-gradient(90deg,#090d18_0%,#090d18_48%,rgba(9,13,24,0.45)_100%)] sm:min-h-[650px] lg:min-h-[620px]">
             <div className="pointer-events-none absolute inset-y-0 right-0 w-[72%] bg-[url('/zeongg-logo.webp')] bg-contain bg-right-bottom bg-no-repeat opacity-95 mix-blend-screen sm:w-[62%] lg:w-[56%]" />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-[58%] bg-[radial-gradient(circle_at_60%_38%,rgba(124,58,237,0.22),transparent_48%),radial-gradient(circle_at_84%_28%,rgba(255,132,43,0.18),transparent_36%)] blur-2xl" />
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,#090d18_0%,#090d18_32%,rgba(9,13,24,0.90)_48%,rgba(9,13,24,0.36)_72%,rgba(9,13,24,0.12)_100%)]" />
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,#090d18_0%,#090d18_36%,rgba(9,13,24,0.92)_52%,rgba(9,13,24,0.36)_74%,rgba(9,13,24,0.12)_100%)]" />
             <div className="pointer-events-none absolute -left-24 top-8 h-[380px] w-[380px] rounded-full border border-violet-400/10" />
             <div className="pointer-events-none absolute -right-20 top-[-120px] h-[460px] w-[460px] rounded-full border border-orange-400/10" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/55 to-orange-300/55" />
 
-            <div className="relative z-10 flex min-h-[860px] flex-col justify-between px-5 py-10 sm:min-h-[760px] sm:px-8 sm:py-12 lg:min-h-[690px] lg:px-12 lg:py-14">
+            <div className="relative z-10 flex min-h-[700px] flex-col justify-between px-5 py-10 sm:min-h-[650px] sm:px-8 sm:py-12 lg:min-h-[620px] lg:px-12 lg:py-14">
               <div className="max-w-2xl">
                 <div className="mb-7 flex items-center gap-3">
                   <span className="h-2.5 w-2.5 rounded-full bg-violet-400 shadow-[0_0_20px_rgba(167,139,250,0.95)]" />
@@ -103,8 +103,8 @@ export default function Home() {
                   </span>
                 </div>
 
-                <h1 className="max-w-[780px] text-5xl font-black leading-[0.9] tracking-[-0.065em] text-white sm:text-6xl lg:text-[5.3rem]">
-                  <span className="bg-gradient-to-r from-violet-300 via-white to-orange-300 bg-clip-text text-transparent">
+                <h1 className="max-w-[820px] text-[2.9rem] font-black leading-[0.9] tracking-[-0.06em] text-white sm:text-6xl lg:text-[4.7rem]">
+                  <span className="whitespace-nowrap bg-gradient-to-r from-violet-300 via-white to-orange-300 bg-clip-text text-transparent">
                     ZeonGGstore—
                   </span>
                   <br />
@@ -132,34 +132,6 @@ export default function Home() {
                     Смотреть дроп
                   </Link>
                 </div>
-              </div>
-
-              <div className="grid max-w-4xl gap-3 md:grid-cols-3">
-                {[
-                  ["01", "Кейсы", "Огромный выбор кейсов на любой вкус", "⌬"],
-                  ["02", "Апгрейд", "Улучшай скины и забирай лучшее", "↗"],
-                  ["03", "Бонусы", "Ежедневные бонусы и акции для тебя", "✦"],
-                ].map(([number, title, description, icon], index) => (
-                  <div
-                    key={number}
-                    className={`group rounded-[26px] border bg-[#0a0f1b]/72 p-5 backdrop-blur-xl transition duration-300 hover:-translate-y-1 ${index === 2 ? "border-orange-300/15 hover:border-orange-300/35" : "border-violet-300/15 hover:border-violet-300/35"}`}
-                  >
-                    <div className="flex items-start gap-4">
-                      <span
-                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border text-2xl ${index === 2 ? "border-orange-300/20 bg-orange-400/[0.08] text-orange-200" : "border-violet-300/20 bg-violet-400/[0.08] text-violet-200"}`}
-                      >
-                        {icon}
-                      </span>
-                      <div>
-                        <div className="text-[0.68rem] font-black uppercase tracking-[0.22em] text-violet-200/75">
-                          {number}
-                        </div>
-                        <div className="mt-1 text-lg font-black text-white">{title}</div>
-                        <div className="mt-2 text-sm leading-6 text-slate-400">{description}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
               </div>
 
               <div className="mt-8 flex justify-center lg:justify-start">
