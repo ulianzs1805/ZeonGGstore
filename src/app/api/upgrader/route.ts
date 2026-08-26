@@ -5,7 +5,9 @@ import { ensureSystemCatalog } from "@/lib/system-catalog";
 import { prisma } from "@/lib/prisma";
 import { resolveSkinImage } from "@/lib/skin-image";
 
-const MIN_CHANCE = 0.1;
+// The upgrader must never go below 25%. Any higher ratio is still calculated
+// from the real ZeonGGStore price of the chosen item/target.
+const MIN_CHANCE = 25;
 const MAX_CHANCE = 100;
 
 function chanceFor(inputValue: number, targetValue: number) {
@@ -42,9 +44,11 @@ export async function GET() {
     prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
   ]);
 
-  const publicInventory = inventory.map(publicItem);
-  const publicTargets = uniqueItems(drops).map(publicItem);
-  return NextResponse.json({ inventory: publicInventory, targets: publicTargets, balance: balance?.balance ?? 0 });
+  return NextResponse.json({
+    inventory: uniqueItems(inventory).map(publicItem),
+    targets: uniqueItems(drops).map(publicItem),
+    balance: balance?.balance ?? 0,
+  });
 }
 
 export async function POST(request: Request) {
@@ -55,7 +59,7 @@ export async function POST(request: Request) {
   const itemId = typeof body?.itemId === "string" ? body.itemId : "";
   const targetId = typeof body?.targetId === "string" ? body.targetId : "";
   const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.slice(0, 100) : "";
-  const balanceTopUp = typeof body?.balanceTopUp === "number" && Number.isFinite(body.balanceTopUp) ? Math.floor(body.balanceTopUp) : 0;
+  const balanceTopUp = typeof body?.balanceTopUp === "number" && Number.isFinite(body.balanceTopUp) ? Math.floor(body.balanceTopUp * 100) / 100 : 0;
 
   if (!idempotencyKey) return NextResponse.json({ error: "IDEMPOTENCY_KEY_REQUIRED" }, { status: 400 });
   if (!targetId) return NextResponse.json({ error: "TARGET_REQUIRED" }, { status: 400 });
@@ -81,10 +85,9 @@ export async function POST(request: Request) {
       if (!target) throw new Error("TARGET_NOT_FOUND");
       if (!freshUser) throw new Error("USER_NOT_FOUND");
 
-      const inputValue = item?.price ?? balanceTopUp;
-      const totalInputValue = item ? item.price + balanceTopUp : balanceTopUp;
-
-      if (!Number.isFinite(inputValue) || !Number.isFinite(totalInputValue) || !Number.isFinite(target.price) || inputValue <= 0 || totalInputValue <= 0) throw new Error("INPUT_VALUE_INVALID");
+      const inputValue = item?.price ?? 0;
+      const totalInputValue = inputValue + balanceTopUp;
+      if (!Number.isFinite(totalInputValue) || !Number.isFinite(target.price) || totalInputValue <= 0) throw new Error("INPUT_VALUE_INVALID");
       if (target.price <= totalInputValue) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
       if (balanceTopUp > freshUser.balance) throw new Error("INSUFFICIENT_BALANCE");
 
@@ -105,7 +108,7 @@ export async function POST(request: Request) {
 
       await tx.operation.create({ data: { userId: user.id, type: success ? "UPGRADE_WIN" : "UPGRADE_LOSS", label: success ? `Апгрейд → ${target.name}` : `Апгрейд → ${target.name} (неудача)`, amount: -totalInputValue, status: success ? "SUCCESS" : "FAILED", idempotencyKey } });
 
-      const inputItem = item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: 0 };
+      const inputItem = item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: balanceTopUp };
       if (!success) return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue };
 
       const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
