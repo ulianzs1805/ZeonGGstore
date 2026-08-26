@@ -16,9 +16,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(canonicalUrl, 307);
   }
 
+  // Metadata image routes must stay public. Safari requests these routes before
+  // a beta session exists; redirecting them to /beta makes Safari receive HTML
+  // instead of PNG and it falls back to the Vercel triangle.
   if (
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
+    pathname === "/icon" ||
+    pathname === "/apple-icon" ||
     pathname === "/beta" ||
     pathname.startsWith("/api/beta/") ||
     (pathname === "/api/cases" && request.method === "GET")
