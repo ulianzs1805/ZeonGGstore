@@ -11,9 +11,9 @@ type Particle = { id: number; x: number; y: number; size: number; rotate: number
 type FragmentMode = "burst" | "gather" | null;
 
 const SPIN_MS = 4200;
-const BURST_MS = 2850;
-const GATHER_MS = 2350;
-const BREAK_MS = BURST_MS + GATHER_MS + 450;
+const BURST_MS = 2200;
+const GATHER_MS = 2200;
+const BREAK_MS = BURST_MS + GATHER_MS;
 const MIN_CHANCE = 25;
 const money = (v: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(v);
 const chanceFor = (input: number, target: number) => Math.max(MIN_CHANCE, Math.min(100, target > 0 ? (input / target) * 100 : MIN_CHANCE));
