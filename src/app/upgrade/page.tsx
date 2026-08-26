@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type Item = { id: string; name: string; rarity: string; image: string; price: number };
 type Result = {
@@ -27,6 +27,7 @@ type Particle = {
   sourceX: number;
   sourceY: number;
 };
+type FragmentMode = "burst" | "gather" | null;
 
 const SPIN_MS = 4200;
 const BURST_MS = 2850;
@@ -44,7 +45,6 @@ function makeParticles(seed: number) {
 
   const particles: Particle[] = [];
   let id = 0;
-
   for (let row = 0; row < 7; row++) {
     for (let col = 0; col < 9; col++) {
       const jitterX = (next(id * 11 + 1) - 0.5) * 5;
@@ -62,7 +62,6 @@ function makeParticles(seed: number) {
       id++;
     }
   }
-
   return particles;
 }
 
@@ -92,7 +91,6 @@ export default function UpgradePage() {
   const winDegrees = Math.max(90, Math.min(360, shownChance * 3.6));
   const displayInput = attempt?.input ?? input;
   const displayTarget = attempt?.target ?? target;
-  const particlesReady = animating && particles.length > 0;
 
   async function load() {
     const r = await fetch("/api/upgrader", { cache: "no-store" });
@@ -162,15 +160,12 @@ export default function UpgradePage() {
   }
 
   async function playResult(data: Result) {
-    const nextParticles = makeParticles(Date.now());
     setResult(data);
-    setParticles(nextParticles);
+    setParticles(makeParticles(Date.now()));
     setPhase("burst");
     setAnimating(true);
 
-    if (data.success) {
-      window.setTimeout(() => setPhase("gather"), BURST_MS);
-    }
+    if (data.success) window.setTimeout(() => setPhase("gather"), BURST_MS);
 
     window.setTimeout(async () => {
       try {
@@ -207,12 +202,7 @@ export default function UpgradePage() {
       const r = await fetch("/api/upgrader", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          itemId: input?.id || "",
-          targetId: target.id,
-          balanceTopUp: topUp,
-          idempotencyKey: crypto.randomUUID(),
-        }),
+        body: JSON.stringify({ itemId: input?.id || "", targetId: target.id, balanceTopUp: topUp, idempotencyKey: crypto.randomUUID() }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Апгрейд не выполнен");
@@ -236,6 +226,11 @@ export default function UpgradePage() {
     });
   }, [targets, total]);
 
+  const leftFragmentItem = animating && result && phase === "gather" && result.success ? displayTarget : displayInput;
+  const leftFragmentMode: FragmentMode = animating && leftFragmentItem ? (phase === "gather" ? "gather" : "burst") : null;
+  const rightFragmentItem = animating && phase === "burst" ? displayTarget : null;
+  const rightFragmentMode: FragmentMode = rightFragmentItem ? "burst" : null;
+
   if (loading) return <main className="min-h-screen bg-[#090b16] p-8 text-center text-zinc-400">Загружаем апгрейдер...</main>;
 
   return <main className="min-h-screen bg-[#090b16] pb-24 text-white">
@@ -249,7 +244,7 @@ export default function UpgradePage() {
         </div>
 
         <div className="relative grid min-h-[300px] grid-cols-[.9fr_1.25fr_.9fr] items-center gap-2 sm:min-h-[470px] sm:gap-8">
-          <WeaponSlot item={displayInput} side="left" onShuffle={() => setInputId("")} hidden={animating} />
+          <WeaponSlot item={displayInput} side="left" onShuffle={() => setInputId("")} imageHidden={animating} fragmentItem={leftFragmentItem} fragmentMode={leftFragmentMode} particles={particles} />
 
           <div className="relative z-10 mx-auto flex w-full max-w-[460px] flex-col items-center">
             <div className="relative h-[250px] w-[250px] sm:h-[390px] sm:w-[390px]">
@@ -267,9 +262,7 @@ export default function UpgradePage() {
             <p className="mt-3 text-center text-[10px] font-black uppercase tracking-[.42em] text-violet-300/55">ZeonGG Upgrade</p>
           </div>
 
-          <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} hidden={animating} />
-
-          {particlesReady && attempt && result && <ParticleAnimation success={result.success} target={attempt.target} input={attempt.input} particles={particles} phase={phase} />}
+          <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={rightFragmentItem} fragmentMode={rightFragmentMode} particles={particles} />
         </div>
 
         <div className="relative z-20 mx-auto mt-7 max-w-5xl rounded-[24px] border border-violet-400/10 bg-[#0e1120]/70 p-4 shadow-[0_22px_80px_rgba(0,0,0,.18)] sm:p-6">
@@ -296,55 +289,42 @@ export default function UpgradePage() {
   </main>;
 }
 
-function WeaponSlot({ item, side, onShuffle, hidden }: { item: Item | null; side: "left" | "right"; onShuffle: () => void; hidden?: boolean }) {
-  return <div className={`relative z-10 flex flex-col items-center justify-center gap-3 text-center transition-all duration-500 ${hidden ? "scale-95 opacity-0" : "scale-100 opacity-100"}`}>
+function WeaponSlot({ item, side, onShuffle, imageHidden, fragmentItem, fragmentMode, particles }: { item: Item | null; side: "left" | "right"; onShuffle: () => void; imageHidden: boolean; fragmentItem: Item | null; fragmentMode: FragmentMode; particles: Particle[] }) {
+  return <div className="relative z-10 flex flex-col items-center justify-center gap-3 text-center">
     <p className="text-[9px] font-black uppercase tracking-[.18em] text-zinc-500 sm:text-xs">{side === "left" ? "ТВОЙ СКИН" : "ЦЕЛЕВОЙ СКИН"}</p>
-    <div className="relative h-20 w-full max-w-[180px] rounded-2xl border border-violet-400/15 bg-[#111424] p-3 shadow-[0_0_30px_rgba(95,48,255,.10)] sm:h-32 sm:max-w-[250px]">
-      {item ? <Image src={item.image} alt={item.name} fill className="object-contain p-3 drop-shadow-[0_0_20px_rgba(116,65,255,.45)]" unoptimized /> : <div className="grid h-full place-items-center text-[9px] font-black uppercase tracking-[.14em] text-zinc-600">Выбери предмет</div>}
+    <div className="relative h-20 w-full max-w-[180px] overflow-visible rounded-2xl border border-violet-400/15 bg-[#111424] p-3 shadow-[0_0_30px_rgba(95,48,255,.10)] sm:h-32 sm:max-w-[250px]">
+      {item ? <Image src={item.image} alt={item.name} fill className={`object-contain p-3 drop-shadow-[0_0_20px_rgba(116,65,255,.45)] transition-opacity duration-150 ${imageHidden ? "opacity-0" : "opacity-100"}`} unoptimized /> : <div className="grid h-full place-items-center text-[9px] font-black uppercase tracking-[.14em] text-zinc-600">Выбери предмет</div>}
+      {fragmentItem && fragmentMode && particles.length > 0 && <SkinFragments item={fragmentItem} particles={particles} mode={fragmentMode} />}
     </div>
-    <button type="button" onClick={onShuffle} aria-label="Сбросить выбор" className="grid h-9 w-9 place-items-center rounded-xl border border-violet-400/15 bg-[#171a2b] text-lg text-violet-200 transition hover:bg-violet-500/15 sm:h-11 sm:w-11">⌘</button>
+    <button type="button" onClick={onShuffle} aria-label="Сбросить выбор" disabled={imageHidden} className="grid h-9 w-9 place-items-center rounded-xl border border-violet-400/15 bg-[#171a2b] text-lg text-violet-200 transition hover:bg-violet-500/15 disabled:opacity-50 sm:h-11 sm:w-11">⌘</button>
     {item ? <div className="max-w-[180px]"><p className="truncate text-[10px] font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p></div> : side === "left" ? <p className="text-[9px] text-zinc-600">Можно играть балансом</p> : null}
   </div>;
 }
 
-function ParticleAnimation({ success, target, input, particles, phase }: { success: boolean; target: Item; input: Item | null; particles: Particle[]; phase: Phase }) {
-  const source = (item: Item | null, side: "left" | "right", gather = false) => {
-    if (!item?.image) return null;
-    const safeImage = item.image.replace(/"/g, "%22");
-    const width = 200;
-    const height = 130;
-
-    return <div className={`pointer-events-none absolute top-1/2 z-40 h-[130px] w-[200px] -translate-y-1/2 sm:h-[150px] sm:w-[230px] ${side === "left" ? "left-0 sm:left-[2%]" : "right-0 sm:right-[2%]"}`}>
-      {particles.map((p) => {
-        const cropX = -(p.sourceX / 100) * width;
-        const cropY = -(p.sourceY / 100) * height;
-        return <span key={`${side}-${gather ? "g" : "b"}-${p.id}`} className={`upgrade-fragment ${gather ? "upgrade-fragment-gather" : "upgrade-fragment-burst"}`} style={{
-          width: `${p.size}px`,
-          height: `${Math.max(12, p.size * 0.72)}px`,
-          left: `calc(${p.sourceX}% - ${p.size / 2}px)`,
-          top: `calc(${p.sourceY}% - ${p.size * 0.36}px)`,
-          backgroundImage: `url("${safeImage}")`,
-          backgroundSize: `${width}px ${height}px`,
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: `${cropX}px ${cropY}px`,
-          ["--x" as string]: `${gather ? -p.x : p.x}px`,
-          ["--y" as string]: `${gather ? -p.y : p.y}px`,
-          ["--r" as string]: `${p.rotate}deg`,
-          animationDelay: `${p.delay}ms`,
-        } as React.CSSProperties} />;
-      })}
-    </div>;
-  };
-
+function SkinFragments({ item, particles, mode }: { item: Item; particles: Particle[]; mode: Exclude<FragmentMode, null> }) {
+  const safeImage = item.image.replace(/"/g, "%22");
+  const width = 200;
+  const height = 130;
   return <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
-    {success ? <>
-      {phase === "burst" && source(input, "left")}
-      {phase === "burst" && source(target, "right")}
-      {phase === "gather" && source(target, "left", true)}
-    </> : <>
-      {source(input, "left")}
-      {source(target, "right")}
-    </>}
+    {particles.map((p) => {
+      const cropX = -(p.sourceX / 100) * width;
+      const cropY = -(p.sourceY / 100) * height;
+      const style: CSSProperties & Record<string, string> = {
+        width: `${p.size}px`,
+        height: `${Math.max(12, p.size * 0.72)}px`,
+        left: `calc(${p.sourceX}% - ${p.size / 2}px)`,
+        top: `calc(${p.sourceY}% - ${p.size * 0.36}px)`,
+        backgroundImage: `url("${safeImage}")`,
+        backgroundSize: `${width}px ${height}px`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: `${cropX}px ${cropY}px`,
+        animationDelay: `${p.delay}ms`,
+        "--x": `${mode === "gather" ? -p.x : p.x}px`,
+        "--y": `${mode === "gather" ? -p.y : p.y}px`,
+        "--r": `${p.rotate}deg`,
+      };
+      return <span key={`${item.id}-${mode}-${p.id}`} className={`upgrade-fragment ${mode === "gather" ? "upgrade-fragment-gather" : "upgrade-fragment-burst"}`} style={style} />;
+    })}
     <style jsx>{`
       .upgrade-fragment { position:absolute; display:block; border-radius:4px; box-shadow:0 0 14px rgba(255,135,45,.28),0 0 24px rgba(118,65,255,.22); will-change:transform,opacity,filter; opacity:0; }
       .upgrade-fragment-burst { animation:upgradeBurst ${BURST_MS}ms cubic-bezier(.12,.72,.16,1) forwards; }
