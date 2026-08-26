@@ -19,7 +19,7 @@ export default function Icon() {
         }}
       >
         <img
-          src="https://raw.githubusercontent.com/ulianzs1805/ZeonGGstore/terminal/public/zeongg-logo.webp"
+          src="https://raw.githubusercontent.com/ulianzs1805/ZeonGGstore/terminal/public/ZeonGgstore-logo.png"
           width="192"
           height="192"
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
