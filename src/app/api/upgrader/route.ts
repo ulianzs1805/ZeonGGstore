@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import { getCurrentUser } from "@/lib/current-user";
 import { ensureSystemCatalog } from "@/lib/system-catalog";
 import { prisma } from "@/lib/prisma";
+import { resolveSkinImage } from "@/lib/skin-image";
 
 const MIN_CHANCE = 0.1;
 const MAX_CHANCE = 100;
@@ -13,7 +14,21 @@ function chanceFor(inputValue: number, targetValue: number) {
 }
 
 function publicItem(item: { id: string; name: string; rarity: string; image: string; price: number }) {
-  return { id: item.id, name: item.name, rarity: item.rarity, image: item.image, price: item.price };
+  return { id: item.id, name: item.name, rarity: item.rarity, image: resolveSkinImage(item.name, item.image), price: Number(item.price) || 0 };
+}
+
+function normalizedItemKey(name: string) {
+  return name.trim().toLowerCase().replace(/[\\/]+/g, " ").replace(/[^a-z0-9а-яё]+/gi, " ").replace(/\s+/g, " ").trim();
+}
+
+function uniqueItems<T extends { name: string }>(items: T[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = normalizedItemKey(item.name);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export async function GET() {
@@ -23,11 +38,13 @@ export async function GET() {
 
   const [inventory, drops, balance] = await Promise.all([
     prisma.inventoryItem.findMany({ where: { userId: user.id, soldAt: null }, orderBy: { addedAt: "desc" }, select: { id: true, name: true, rarity: true, image: true, price: true } }),
-    prisma.drop.findMany({ where: { case: { environment: "SYSTEM", isActive: true } }, orderBy: [{ price: "asc" }, { name: "asc" }], select: { id: true, name: true, rarity: true, image: true, price: true } }),
+    prisma.drop.findMany({ where: { case: { environment: "SYSTEM", isActive: true } }, orderBy: [{ price: "asc" }, { name: "asc" }, { id: "asc" }], select: { id: true, name: true, rarity: true, image: true, price: true } }),
     prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
   ]);
 
-  return NextResponse.json({ inventory, targets: drops, balance: balance?.balance ?? 0 });
+  const publicInventory = inventory.map(publicItem);
+  const publicTargets = uniqueItems(drops).map(publicItem);
+  return NextResponse.json({ inventory: publicInventory, targets: publicTargets, balance: balance?.balance ?? 0 });
 }
 
 export async function POST(request: Request) {
@@ -67,18 +84,11 @@ export async function POST(request: Request) {
       const inputValue = item?.price ?? balanceTopUp;
       const totalInputValue = item ? item.price + balanceTopUp : balanceTopUp;
 
-      if (!Number.isFinite(inputValue) || !Number.isFinite(totalInputValue) || !Number.isFinite(target.price) || inputValue <= 0 || totalInputValue <= 0) {
-        throw new Error("INPUT_VALUE_INVALID");
-      }
+      if (!Number.isFinite(inputValue) || !Number.isFinite(totalInputValue) || !Number.isFinite(target.price) || inputValue <= 0 || totalInputValue <= 0) throw new Error("INPUT_VALUE_INVALID");
       if (target.price <= totalInputValue) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
       if (balanceTopUp > freshUser.balance) throw new Error("INSUFFICIENT_BALANCE");
 
-      // Helper buttons on the client are optional auto-selection shortcuts.
-      // A normal manual upgrade must work with any valid target that is more
-      // expensive than the total stake. The server remains authoritative for
-      // prices, chance calculation, balance checks and item ownership.
       const chance = chanceFor(totalInputValue, target.price);
-
       const roll = randomInt(0, 1_000_000) / 10_000;
       const success = roll < chance;
       const now = new Date();
