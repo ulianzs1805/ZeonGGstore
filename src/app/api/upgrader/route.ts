@@ -6,12 +6,6 @@ import { prisma } from "@/lib/prisma";
 
 const MIN_CHANCE = 0.1;
 const MAX_CHANCE = 100;
-const CHANCE_BANDS = [
-  { min: 30, max: 39.99 },
-  { min: 50, max: 59.99 },
-  { min: 70, max: 79.99 },
-] as const;
-const MULTIPLIERS = [2, 5, 10] as const;
 
 function chanceFor(inputValue: number, targetValue: number) {
   if (!Number.isFinite(inputValue) || !Number.isFinite(targetValue) || inputValue <= 0 || targetValue <= 0) return MIN_CHANCE;
@@ -20,17 +14,6 @@ function chanceFor(inputValue: number, targetValue: number) {
 
 function publicItem(item: { id: string; name: string; rarity: string; image: string; price: number }) {
   return { id: item.id, name: item.name, rarity: item.rarity, image: item.image, price: item.price };
-}
-
-function isAllowedUpgrade(totalInputValue: number, targetPrice: number) {
-  if (!Number.isFinite(totalInputValue) || !Number.isFinite(targetPrice) || totalInputValue <= 0 || targetPrice <= totalInputValue) return false;
-  const chance = chanceFor(totalInputValue, targetPrice);
-  if (CHANCE_BANDS.some((band) => chance >= band.min && chance <= band.max)) return true;
-  const ratio = targetPrice / totalInputValue;
-  return MULTIPLIERS.some((multiplier) => {
-    const tolerance = multiplier * 0.1;
-    return ratio >= multiplier - tolerance && ratio <= multiplier + tolerance;
-  });
 }
 
 export async function GET() {
@@ -90,15 +73,11 @@ export async function POST(request: Request) {
       if (target.price <= totalInputValue) throw new Error("TARGET_MUST_BE_MORE_EXPENSIVE");
       if (balanceTopUp > freshUser.balance) throw new Error("INSUFFICIENT_BALANCE");
 
-      // The server is authoritative: calculate the real chance from DB prices.
-      // The client does not send or control the chance/mode.
+      // Helper buttons on the client are optional auto-selection shortcuts.
+      // A normal manual upgrade must work with any valid target that is more
+      // expensive than the total stake. The server remains authoritative for
+      // prices, chance calculation, balance checks and item ownership.
       const chance = chanceFor(totalInputValue, target.price);
-      if (!isAllowedUpgrade(totalInputValue, target.price)) {
-        // Keep the strict mode protection, but return a useful machine-readable
-        // error so the UI can immediately select another valid target instead
-        // of leaving the user stuck on an impossible target.
-        throw new Error(`UPGRADE_MODE_NOT_ALLOWED:${chance.toFixed(2)}`);
-      }
 
       const roll = randomInt(0, 1_000_000) / 10_000;
       const success = roll < chance;
@@ -128,8 +107,7 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "UPGRADE_FAILED";
-    const baseCode = code.startsWith("UPGRADE_MODE_NOT_ALLOWED") ? "UPGRADE_MODE_NOT_ALLOWED" : code;
-    const status = ["ITEMS_NOT_AVAILABLE", "ITEMS_CHANGED", "BALANCE_CHANGED", "TARGET_MUST_BE_MORE_EXPENSIVE", "UPGRADE_MODE_NOT_ALLOWED", "INPUT_VALUE_INVALID"].includes(baseCode) ? 409 : 400;
-    return NextResponse.json({ error: baseCode }, { status });
+    const status = ["ITEMS_NOT_AVAILABLE", "ITEMS_CHANGED", "BALANCE_CHANGED", "TARGET_MUST_BE_MORE_EXPENSIVE", "INPUT_VALUE_INVALID"].includes(code) ? 409 : 400;
+    return NextResponse.json({ error: code }, { status });
   }
 }
