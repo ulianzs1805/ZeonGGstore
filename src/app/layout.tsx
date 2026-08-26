@@ -11,8 +11,9 @@ export const metadata: Metadata = {
   description: "ZeonGGStore — кейсы, дропы и апгрейд скинов в закрытой бете.",
   applicationName: "ZeonGGStore",
   icons: {
-    icon: "/zeongg-logo.webp",
-    apple: "/zeongg-logo.webp",
+    icon: [{ url: "/icon", type: "image/png", sizes: "192x192" }],
+    apple: [{ url: "/apple-icon", type: "image/png", sizes: "180x180" }],
+    shortcut: "/icon",
   },
   openGraph: {
     title: "ZeonGGStore",
