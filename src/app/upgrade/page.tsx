@@ -17,16 +17,7 @@ type Result = {
 };
 type Attempt = { input: Item | null; target: Item; chance: number };
 type Phase = "idle" | "burst" | "gather";
-type Particle = {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  rotate: number;
-  delay: number;
-  sourceX: number;
-  sourceY: number;
-};
+type Particle = { id: number; x: number; y: number; size: number; rotate: number; delay: number; sourceX: number; sourceY: number };
 type FragmentMode = "burst" | "gather" | null;
 
 const SPIN_MS = 4200;
@@ -42,7 +33,6 @@ function makeParticles(seed: number) {
     const x = Math.sin(n * 981.73 + seed * 0.00021) * 10000;
     return x - Math.floor(x);
   };
-
   const particles: Particle[] = [];
   let id = 0;
   for (let row = 0; row < 7; row++) {
@@ -65,6 +55,13 @@ function makeParticles(seed: number) {
   return particles;
 }
 
+function preloadImage(src?: string | null) {
+  if (!src || typeof window === "undefined") return;
+  const img = new window.Image();
+  img.decoding = "async";
+  img.src = src;
+}
+
 export default function UpgradePage() {
   const [inventory, setInventory] = useState<Item[]>([]);
   const [targets, setTargets] = useState<Item[]>([]);
@@ -82,8 +79,10 @@ export default function UpgradePage() {
   const [animating, setAnimating] = useState(false);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [optimisticInput, setOptimisticInput] = useState<Item | null>(null);
 
-  const input = inventory.find((x) => x.id === inputId) || null;
+  const inventoryInput = inventory.find((x) => x.id === inputId) || null;
+  const input = optimisticInput && inputId === optimisticInput.id ? optimisticInput : inventoryInput;
   const target = targets.find((x) => x.id === targetId) || null;
   const total = (input?.price || 0) + topUp;
   const chance = target && total > 0 ? chanceFor(total, target.price) : MIN_CHANCE;
@@ -109,6 +108,7 @@ export default function UpgradePage() {
 
   function chooseInput(id: string) {
     if (busy || spinning || animating) return;
+    setOptimisticInput(null);
     setInputId((current) => current === id ? "" : id);
     setTopUp(0);
     setError("");
@@ -137,15 +137,14 @@ export default function UpgradePage() {
   }
 
   function startRoulette(data: Result) {
+    if (data.success) preloadImage(data.resultItem?.image || data.target?.image);
     const sector = Math.max(90, Math.min(359.64, data.chance * 3.6));
     const margin = Math.min(7, Math.max(2.5, sector * 0.04, (360 - sector) * 0.04));
     const winMin = margin;
     const winMax = Math.max(winMin + 0.01, sector - margin);
     const loseMin = Math.min(359.5, sector + margin);
     const loseMax = Math.max(loseMin + 0.01, 360 - margin);
-    const landing = data.success
-      ? winMin + Math.random() * (winMax - winMin)
-      : loseMin + Math.random() * (loseMax - loseMin);
+    const landing = data.success ? winMin + Math.random() * (winMax - winMin) : loseMin + Math.random() * (loseMax - loseMin);
 
     setAngle((current) => {
       const norm = ((current % 360) + 360) % 360;
@@ -167,37 +166,52 @@ export default function UpgradePage() {
 
     if (data.success) window.setTimeout(() => setPhase("gather"), BURST_MS);
 
-    window.setTimeout(async () => {
-      try {
-        const fresh = await load();
-        if (data.success && data.resultItem) {
-          const won = fresh.find((x) => x.id === data.resultItem!.id)
-            || fresh.find((x) => x.name.toLowerCase() === data.resultItem!.name.toLowerCase());
-          setInputId(won?.id || "");
-        } else {
-          setInputId("");
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря");
-      } finally {
+    window.setTimeout(() => {
+      if (data.success && data.resultItem) {
+        const won = data.resultItem;
+        setOptimisticInput(won);
+        setInventory((current) => {
+          const oldId = data.inputItem?.id || attempt?.input?.id;
+          const filtered = current.filter((item) => item.id !== oldId && item.id !== won.id && item.name.toLowerCase() !== won.name.toLowerCase());
+          return [won, ...filtered];
+        });
+        setInputId(won.id);
         setTargetId("");
         setTopUp(0);
         setAttempt(null);
         setParticles([]);
         setPhase("idle");
         setAnimating(false);
+
+        void load().then((fresh) => {
+          const serverWinner = fresh.find((item) => item.id === won.id) || fresh.find((item) => item.name.toLowerCase() === won.name.toLowerCase());
+          if (serverWinner) {
+            setOptimisticInput(serverWinner);
+            setInputId(serverWinner.id);
+          }
+        }).catch((e) => setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря"));
+      } else {
+        const oldId = data.inputItem?.id || attempt?.input?.id;
+        if (oldId) setInventory((current) => current.filter((item) => item.id !== oldId));
+        setOptimisticInput(null);
+        setInputId("");
+        setTargetId("");
+        setTopUp(0);
+        setAttempt(null);
+        setParticles([]);
+        setPhase("idle");
+        setAnimating(false);
+        void load().catch((e) => setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря"));
       }
     }, data.success ? BREAK_MS : BURST_MS + 350);
   }
 
   async function upgrade() {
     if (!target || total <= 0 || target.price <= total || topUp > balance || busy || spinning || animating) return;
-
     setBusy(true);
     setError("");
     setResult(null);
     setAttempt({ input, target, chance });
-
     try {
       const r = await fetch("/api/upgrader", {
         method: "POST",
@@ -237,15 +251,13 @@ export default function UpgradePage() {
     <div className="mx-auto max-w-[1280px] overflow-hidden">
       <section className="relative overflow-hidden border-y border-violet-400/10 bg-[radial-gradient(circle_at_50%_34%,rgba(110,49,255,.20),transparent_30%),radial-gradient(circle_at_20%_25%,rgba(255,119,34,.09),transparent_28%),linear-gradient(180deg,#0d1020_0%,#090b16_82%)] px-4 py-8 sm:px-8 sm:py-10">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[linear-gradient(120deg,transparent,rgba(115,53,255,.05),transparent)]" />
-
         <div className="relative mb-6 flex items-center justify-between gap-4 rounded-2xl border border-violet-400/10 bg-[#0e1120]/90 px-5 py-4 shadow-[0_16px_60px_rgba(0,0,0,.22)]">
           <div><p className="text-[9px] font-black tracking-[.34em] text-violet-300">ZEONGGSTORE</p><h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">Апгрейдер</h1></div>
           <div className="text-right"><p className="text-[8px] font-black tracking-[.22em] text-zinc-500">БАЛАНС</p><p className="mt-1 font-black text-[#f2b84d]">{money(balance)} Z</p></div>
         </div>
 
         <div className="relative grid min-h-[300px] grid-cols-[.9fr_1.25fr_.9fr] items-center gap-2 sm:min-h-[470px] sm:gap-8">
-          <WeaponSlot item={displayInput} side="left" onShuffle={() => setInputId("")} imageHidden={animating} fragmentItem={leftFragmentItem} fragmentMode={leftFragmentMode} particles={particles} />
-
+          <WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={leftFragmentItem} fragmentMode={leftFragmentMode} particles={particles} />
           <div className="relative z-10 mx-auto flex w-full max-w-[460px] flex-col items-center">
             <div className="relative h-[250px] w-[250px] sm:h-[390px] sm:w-[390px]">
               <div className="absolute inset-[7%] rounded-full border-[8px] border-[#261a4b] bg-[#0b0d18] shadow-[0_0_42px_rgba(111,51,255,.22)]" style={{ background: `conic-gradient(from 0deg,#ff8a2a 0deg ${winDegrees}deg,#7a3cf2 ${winDegrees}deg 360deg)` }}>
@@ -261,7 +273,6 @@ export default function UpgradePage() {
             </div>
             <p className="mt-3 text-center text-[10px] font-black uppercase tracking-[.42em] text-violet-300/55">ZeonGG Upgrade</p>
           </div>
-
           <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={rightFragmentItem} fragmentMode={rightFragmentMode} particles={particles} />
         </div>
 
@@ -280,7 +291,6 @@ export default function UpgradePage() {
           {error && <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-center text-sm text-red-200">{error}</div>}
         </div>
       </section>
-
       <section className="grid gap-4 bg-[#090b16] px-4 py-6 md:grid-cols-2 sm:px-8 sm:py-8">
         <InventoryPanel title="ТВОЙ ИНВЕНТАРЬ" empty="Выбери скин или используй только баланс" items={inventory} active={inputId} onPick={chooseInput} />
         <InventoryPanel title="ДОСТУПНЫЕ ЦЕЛИ" empty={total > 0 ? "Нет более дорогих целей" : "Сначала выбери скин или добавь баланс"} items={availableTargets} active={targetId} onPick={chooseTarget} />
@@ -310,18 +320,9 @@ function SkinFragments({ item, particles, mode }: { item: Item; particles: Parti
       const cropX = -(p.sourceX / 100) * width;
       const cropY = -(p.sourceY / 100) * height;
       const style: CSSProperties & Record<string, string> = {
-        width: `${p.size}px`,
-        height: `${Math.max(12, p.size * 0.72)}px`,
-        left: `calc(${p.sourceX}% - ${p.size / 2}px)`,
-        top: `calc(${p.sourceY}% - ${p.size * 0.36}px)`,
-        backgroundImage: `url("${safeImage}")`,
-        backgroundSize: `${width}px ${height}px`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: `${cropX}px ${cropY}px`,
-        animationDelay: `${p.delay}ms`,
-        "--x": `${mode === "gather" ? -p.x : p.x}px`,
-        "--y": `${mode === "gather" ? -p.y : p.y}px`,
-        "--r": `${p.rotate}deg`,
+        width: `${p.size}px`, height: `${Math.max(12, p.size * 0.72)}px`, left: `calc(${p.sourceX}% - ${p.size / 2}px)`, top: `calc(${p.sourceY}% - ${p.size * 0.36}px)`,
+        backgroundImage: `url("${safeImage}")`, backgroundSize: `${width}px ${height}px`, backgroundRepeat: "no-repeat", backgroundPosition: `${cropX}px ${cropY}px`, animationDelay: `${p.delay}ms`,
+        "--x": `${mode === "gather" ? -p.x : p.x}px`, "--y": `${mode === "gather" ? -p.y : p.y}px`, "--r": `${p.rotate}deg`,
       };
       return <span key={`${item.id}-${mode}-${p.id}`} className={`upgrade-fragment ${mode === "gather" ? "upgrade-fragment-gather" : "upgrade-fragment-burst"}`} style={style} />;
     })}
@@ -329,18 +330,8 @@ function SkinFragments({ item, particles, mode }: { item: Item; particles: Parti
       .upgrade-fragment { position:absolute; display:block; border-radius:4px; box-shadow:0 0 14px rgba(255,135,45,.28),0 0 24px rgba(118,65,255,.22); will-change:transform,opacity,filter; opacity:0; }
       .upgrade-fragment-burst { animation:upgradeBurst ${BURST_MS}ms cubic-bezier(.12,.72,.16,1) forwards; }
       .upgrade-fragment-gather { animation:upgradeGather ${GATHER_MS}ms cubic-bezier(.16,.78,.18,1) forwards; }
-      @keyframes upgradeBurst {
-        0% { opacity:0; transform:translate(0,0) rotate(0deg) scale(1); filter:brightness(1.35) saturate(1.12); }
-        8% { opacity:1; }
-        48% { opacity:1; filter:brightness(1.08) saturate(1.08); }
-        100% { opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.55); filter:brightness(.65) saturate(.9); }
-      }
-      @keyframes upgradeGather {
-        0% { opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.48); filter:brightness(.7) saturate(.9); }
-        12% { opacity:1; }
-        68% { opacity:1; filter:brightness(1.16) saturate(1.1); }
-        100% { opacity:0; transform:translate(0,0) rotate(0deg) scale(1); filter:brightness(1.7) saturate(1.25); }
-      }
+      @keyframes upgradeBurst { 0% { opacity:0; transform:translate(0,0) rotate(0deg) scale(1); filter:brightness(1.35) saturate(1.12); } 8% { opacity:1; } 48% { opacity:1; filter:brightness(1.08) saturate(1.08); } 100% { opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.55); filter:brightness(.65) saturate(.9); } }
+      @keyframes upgradeGather { 0% { opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.48); filter:brightness(.7) saturate(.9); } 12% { opacity:1; } 68% { opacity:1; filter:brightness(1.16) saturate(1.1); } 100% { opacity:0; transform:translate(0,0) rotate(0deg) scale(1); filter:brightness(1.7) saturate(1.25); } }
     `}</style>
   </div>;
 }
