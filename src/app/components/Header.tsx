@@ -79,28 +79,39 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#070b11]/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="group flex min-w-0 items-center gap-4" aria-label="ZeonGGStore — главная">
-          <Image src="/AFED0327-AB02-4E23-9FCC-B94940A08A4C.png" alt="Логотип ZeonGGStore" width={224} height={112} priority className="h-12 w-[112px] shrink-0 object-contain sm:h-14 sm:w-[132px]" />
-          <span className="hidden min-w-0 flex-col justify-center leading-none sm:flex">
+      <div className="mx-auto grid max-w-[1440px] grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
+        <Link href="/" className="flex min-w-0 shrink-0 items-center gap-3" aria-label="ZeonGGStore — главная">
+          <Image
+            src="/AFED0327-AB02-4E23-9FCC-B94940A08A4C.png"
+            alt="Логотип ZeonGGStore"
+            width={224}
+            height={112}
+            priority
+            className="h-12 w-[112px] shrink-0 object-contain sm:h-14 sm:w-[132px]"
+          />
+          <span className="hidden shrink-0 flex-col justify-center leading-none lg:flex">
             <span className="text-xl font-black tracking-[-0.08em] text-[#f4f1ff]">ZEON<span className="text-orange-300">GG</span></span>
             <span className="mt-1 text-[0.56rem] font-black tracking-[0.38em] text-violet-300/90">STORE</span>
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-7 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-slate-300 md:flex">
-          {navItems.map((item) => <Link key={item.label} href={item.href} className="transition hover:text-violet-200">{item.label}</Link>)}
+        <nav className="hidden min-w-0 items-center justify-center gap-5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-slate-300 md:flex lg:gap-7">
+          {navItems.map((item) => (
+            <Link key={item.label} href={item.href} className="shrink-0 whitespace-nowrap transition hover:text-violet-200">
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
           <div className="hidden items-center gap-2 rounded-xl border border-violet-500/30 bg-[#111827]/80 px-3 py-2 text-[0.7rem] font-semibold text-slate-100 shadow-[0_0_18px_rgba(168,85,247,0.2)] sm:flex">
             <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-500/20 text-[0.6rem] font-black text-violet-200">Z</span>
             <span>{balance === null ? "—" : `${new Intl.NumberFormat("ru-RU").format(balance)} Z`}</span>
           </div>
 
           {session ? (
-            <div className="flex items-center gap-3">
-              {roleBadge(role) && <span className="hidden text-[0.58rem] font-black uppercase tracking-[0.14em] text-violet-200 lg:inline">{roleBadge(role)}</span>}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {roleBadge(role) && <span className="hidden text-[0.58rem] font-black uppercase tracking-[0.14em] text-violet-200 xl:inline">{roleBadge(role)}</span>}
               <div className="relative">
                 <button type="button" onClick={() => { setNotificationOpen((open) => !open); setMenuOpen(false); void markNotificationsRead(); }} className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-200 transition hover:border-violet-300/50 hover:text-white" aria-label="Открыть уведомления">
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
