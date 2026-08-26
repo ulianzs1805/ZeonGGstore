@@ -212,7 +212,61 @@ export default function UpgradePage() {
   function setChancePreset(percent: number) { if (!target || busy || spinning || animating) return; const wanted = target.price * (percent / 100); setTopUp(Math.round(Math.max(0, Math.min(balance, wanted - (input?.price || 0))) * 100) / 100); }
   function chooseMultiplier(multiplier: number) { if (total <= 0 || busy || spinning || animating) return; const desired = total * multiplier; const candidates = targets.filter((x) => x.price > total); const closest = candidates.reduce<Item | null>((best, item) => !best || Math.abs(item.price - desired) < Math.abs(best.price - desired) ? item : best, null); if (closest) setTargetId(closest.id); }
   function startRoulette(data: Result) { if (data.success) preloadImage(data.resultItem?.image || data.target?.image); const sector = Math.max(90, Math.min(359.64, data.chance * 3.6)); const margin = Math.min(7, Math.max(2.5, sector * 0.04, (360 - sector) * 0.04)); const winMin = margin; const winMax = Math.max(winMin + 0.01, sector - margin); const loseMin = Math.min(359.5, sector + margin); const loseMax = Math.max(loseMin + 0.01, 360 - margin); const landing = data.success ? winMin + Math.random() * (winMax - winMin) : loseMin + Math.random() * (loseMax - loseMin); setAngle((current) => { const norm = ((current % 360) + 360) % 360; return current + 2160 + ((landing - norm + 360) % 360); }); setSpinning(true); window.setTimeout(() => { setSpinning(false); void playResult(data); }, SPIN_MS + 100); }
-  async function playResult(data: Result) { setResult(data); setParticles(makeParticles(Date.now())); setPhase("burst"); setAnimating(true); if (data.success) window.setTimeout(() => setPhase("gather"), BURST_MS); window.setTimeout(() => { if (data.success && data.resultItem) { const won = data.resultItem; setOptimisticInput(won); setInventory((current) => { const oldId = data.inputItem?.id || attempt?.input?.id; const filtered = current.filter((item) => item.id !== oldId && item.id !== won.id && item.name.toLowerCase() !== won.name.toLowerCase()); return [won, ...filtered]; }); setInputId(won.id); setTargetId(""); setTopUp(0); setAttempt(null); setParticles([]); setPhase("idle"); setAnimating(false); void load().then((fresh) => { const serverWinner = fresh.find((item) => item.id === won.id) || fresh.find((item) => item.name.toLowerCase() === won.name.toLowerCase()); if (serverWinner) { setOptimisticInput(serverWinner); setInputId(serverWinner.id); } }).catch((e) => setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря")); } else { const oldId = data.inputItem?.id || attempt?.input?.id; if (oldId) setInventory((current) => current.filter((item) => item.id !== oldId)); setOptimisticInput(null); setInputId(""); setTargetId(""); setTopUp(0); setAttempt(null); setParticles([]); setPhase("idle"); setAnimating(false); void load().catch((e) => setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря")); } }, data.success ? BREAK_MS : BURST_MS + 350); }
+  async function playResult(data: Result) { setResult(data); setParticles(makeParticles(Date.now())); setPhase("burst"); setAnimating(true);
+if (data.success) {
+  window.setTimeout(() => setPhase("gather"), BURST_MS);
+}
+
+window.setTimeout(() => {
+  if (data.success && data.resultItem) {
+    const won = data.resultItem;
+    setOptimisticInput(won);
+    setInventory((current) => {
+      const oldId = data.inputItem?.id || attempt?.input?.id;
+      const filtered = current.filter(
+        (item) =>
+          item.id !== oldId &&
+          item.id !== won.id &&
+          item.name.toLowerCase() !== won.name.toLowerCase()
+      );
+      return [won, ...filtered];
+    });
+    setInputId(won.id);
+    setTargetId("");
+    setTopUp(0);
+    setAttempt(null);
+    setParticles([]);
+    setPhase("idle");
+    setAnimating(false);
+    void load().then((fresh) => {
+      const serverWinner =
+        fresh.find((item) => item.id === won.id) ||
+        fresh.find((item) => item.name.toLowerCase() === won.name.toLowerCase());
+      if (serverWinner) {
+        setOptimisticInput(serverWinner);
+        setInputId(serverWinner.id);
+      }
+    }).catch((e) =>
+      setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря")
+    );
+  } else {
+    const oldId = data.inputItem?.id || attempt?.input?.id;
+    if (oldId) {
+      setInventory((current) => current.filter((item) => item.id !== oldId));
+    }
+    setOptimisticInput(null);
+    setInputId("");
+    setTargetId("");
+    setTopUp(0);
+    setAttempt(null);
+    setParticles([]);
+    setPhase("idle");
+    setAnimating(false);
+    void load().catch((e) =>
+      setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря")
+    );
+  }
+}, data.success ? BREAK_MS : BURST_MS);}
   async function upgrade() { if (!target || total <= 0 || target.price <= total || topUp > balance || busy || spinning || animating) return; setBusy(true); setError(""); setResult(null); setAttempt({ input, target, chance }); try { const r = await fetch("/api/upgrader", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: input?.id || "", targetId: target.id, balanceTopUp: topUp, idempotencyKey: crypto.randomUUID() }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Апгрейд не выполнен"); setBalance((v) => Math.max(0, v - topUp)); startRoulette(d); } catch (e) { setAttempt(null); setError(e instanceof Error ? e.message : "Ошибка апгрейда"); } finally { setBusy(false); } }
   const availableTargets = useMemo(() => { const seen = new Set<string>(); return targets.filter((x) => { const key = x.name.trim().toLowerCase(); if (seen.has(key)) return false; seen.add(key); return total > 0 ? x.price > total : true; }); }, [targets, total]);
   const leftFragmentItem =
