@@ -40,3 +40,16 @@ img {
   background: rgba(168, 85, 247, 0.35);
   color: white;
 }
+
+/* Upgrader: side columns must never resize from weapon name or PNG dimensions. */
+.grid.grid-cols-\[\.9fr_1\.25fr_\.9fr\] {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 0.9fr) !important;
+}
+
+.grid.grid-cols-\[\.9fr_1\.25fr_\.9fr\] > * {
+  min-width: 0;
+}
+
+.grid.grid-cols-\[\.9fr_1\.25fr_\.9fr\] > .flex {
+  width: 100%;
+}
