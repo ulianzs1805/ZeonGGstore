@@ -10,9 +10,9 @@ type Phase = "idle" | "win-break" | "win-form" | "lose-break";
 
 const MIN_CHANCE = 0.1;
 const SPIN_MS = 4200;
-const BREAK_MS = 1200;
-const FORM_MS = 1800;
-const LOSE_MS = 3000;
+const BREAK_MS = 2300;
+const FORM_MS = 2300;
+const LOSE_MS = 3200;
 const CHANCE_BANDS: ChanceBand[] = [{ label: "70–79%", min: 70, max: 79.99 }, { label: "50–59%", min: 50, max: 59.99 }, { label: "30–39%", min: 30, max: 39.99 }];
 const MULTIPLIERS = [2, 5, 10];
 const money = (v: number) => new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(v);
@@ -131,8 +131,13 @@ export default function UpgradePage() {
   }
 
   function startRoulette(data: Result) {
-    const sector = Math.max(0.36, data.chance * 3.6);
-    const landing = data.success ? Math.random() * Math.max(0.1, sector - 1) + .5 : sector + 1 + Math.random() * Math.max(0.1, 358 - sector);
+    const sector = Math.max(0.36, Math.min(360, data.chance * 3.6));
+    // Never let a winning spin visually touch the violet border and vice versa.
+    const safeInside = Math.max(0.08, Math.min(0.92, 0.22 + Math.random() * 0.56));
+    const safeOutside = Math.max(0.08, Math.min(0.92, 0.16 + Math.random() * 0.68));
+    const landing = data.success
+      ? sector * safeInside
+      : sector >= 359.5 ? 359.5 : sector + (360 - sector) * safeOutside;
     setSpinning(true);
     setAngle((v) => v + 2160 + landing);
     window.setTimeout(() => { setSpinning(false); resolveAttempt(data); }, SPIN_MS + 80);
@@ -161,10 +166,11 @@ export default function UpgradePage() {
 
   return <main className="min-h-screen bg-[#04050a] px-2 pb-24 pt-3 text-white sm:px-4 lg:px-6">
     <style jsx global>{`
-      @keyframes zeonCoreFade {0%{opacity:1;transform:scale(1);filter:brightness(1)}20%{opacity:.8;filter:brightness(1.8)}100%{opacity:0;transform:scale(.92);filter:brightness(.4)}}
-      @keyframes zeonFragment {0%{opacity:0;transform:translate(-50%,-50%) translate(0,0) rotate(0deg) scale(.45);filter:brightness(1.35) saturate(1.25)}8%{opacity:1}58%{opacity:.95}100%{opacity:0;transform:translate(-50%,-50%) translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(.12);filter:brightness(.7) saturate(.9)}}
-      @keyframes zeonForm {0%{opacity:0;transform:scale(.78);filter:blur(14px) brightness(2.5)}35%{opacity:.92;transform:scale(1.06);filter:blur(2px) brightness(1.5)}100%{opacity:1;transform:scale(1);filter:blur(0) brightness(1)}}
-      .zeon-core-break{animation:zeonCoreFade var(--d,1200ms) cubic-bezier(.2,.7,.2,1) forwards}.zeon-form{animation:zeonForm var(--d,1800ms) cubic-bezier(.16,.9,.2,1) both}.zeon-fragment{position:absolute;left:50%;top:50%;background-repeat:no-repeat;pointer-events:none;will-change:transform,opacity,filter;animation:zeonFragment var(--d,1200ms) cubic-bezier(.08,.65,.18,1) forwards;box-shadow:0 0 5px rgba(255,255,255,.12)}
+      @keyframes zeonCoreFade {0%{opacity:1;transform:scale(1);filter:brightness(1)}16%{opacity:.9;filter:brightness(1.25)}100%{opacity:0;transform:scale(.985);filter:brightness(.75)}}
+      @keyframes zeonFragment {0%{opacity:0;transform:translate(-50%,-50%) translate(0,0) rotate(0deg) scale(.65);filter:brightness(1.18) saturate(1.3)}6%{opacity:1}42%{opacity:1}72%{opacity:.88}100%{opacity:0;transform:translate(-50%,-50%) translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(.5);filter:brightness(.72) saturate(.95)}}
+      @keyframes zeonAssemble {0%{opacity:0;transform:translate(-50%,-50%) translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(.5);filter:brightness(.7) saturate(1.15)}22%{opacity:1}72%{opacity:.96}100%{opacity:0;transform:translate(-50%,-50%) translate(0,0) rotate(0deg) scale(.7);filter:brightness(1.3) saturate(1.15)}}
+      @keyframes zeonForm {0%{opacity:0;transform:scale(.96);filter:blur(8px) brightness(1.5)}38%{opacity:.55;transform:scale(1.02);filter:blur(3px) brightness(1.2)}100%{opacity:1;transform:scale(1);filter:blur(0) brightness(1)}}
+      .zeon-core-break{animation:zeonCoreFade var(--d,2300ms) cubic-bezier(.2,.7,.2,1) forwards}.zeon-form{animation:zeonForm var(--d,2300ms) cubic-bezier(.16,.9,.2,1) both}.zeon-fragment{position:absolute;left:50%;top:50%;background-repeat:no-repeat;pointer-events:none;will-change:transform,opacity,filter;animation:zeonFragment var(--d,2300ms) cubic-bezier(.08,.65,.18,1) forwards;box-shadow:0 0 8px rgba(255,255,255,.14)}.zeon-assemble{position:absolute;left:50%;top:50%;background-repeat:no-repeat;pointer-events:none;will-change:transform,opacity,filter;animation:zeonAssemble var(--d,2300ms) cubic-bezier(.12,.7,.16,1) forwards;box-shadow:0 0 7px rgba(255,255,255,.12)}
     `}</style>
     <div className="mx-auto max-w-[1180px]">
       <header className="mb-3 flex items-center justify-between rounded-2xl border border-violet-400/15 bg-[#0b0d15] px-4 py-3"><div><p className="text-[9px] font-black uppercase tracking-[.28em] text-violet-300">ZeonGGStore</p><h1 className="text-2xl font-black">Апгрейдер</h1></div><div className="text-right"><p className="text-[8px] uppercase tracking-widest text-slate-500">Баланс</p><b className="text-sm text-yellow-300">{money(balance)} Z</b></div></header>
@@ -173,7 +179,7 @@ export default function UpgradePage() {
       <section className="rounded-3xl border border-violet-300/10 bg-[#0b0d15] p-3 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2"><button type="button" onClick={toggleNoSkin} disabled={spinning || busy || resolving} className={`rounded-lg border px-3 py-2 text-[9px] font-black uppercase tracking-wider ${noSkinMode ? "border-orange-400/40 bg-orange-500/15 text-orange-300" : "border-white/10 bg-black/20 text-slate-400"}`}>Без скина → за баланс</button><span className="text-[8px] text-slate-600">Цена предмета берётся из каталога ZeonGGStore</span></div>
         <div className="grid grid-cols-[minmax(82px,150px)_minmax(130px,1fr)_minmax(100px,180px)] items-center gap-2 sm:gap-6">
-          <SelectedCard item={visualInput} label={noSkinMode ? "БЕЗ СКИНА" : "ТВОЙ СКИН"} compact balanceMode={noSkinMode} breakNow={phase === "win-break" || phase === "lose-break"} formNow={phase === "win-form"} duration={phase === "lose-break" ? LOSE_MS : phase === "win-form" ? FORM_MS : BREAK_MS} />
+          <SelectedCard item={visualInput} label={noSkinMode ? "БЕЗ СКИНА" : "ТВОЙ СКИН"} compact balanceMode={noSkinMode} breakNow={phase === "win-break" || phase === "lose-break"} formNow={phase === "win-form"} duration={phase === "lose-break" ? LOSE_MS : phase === "win-form" ? FORM_MS : BREAK_MS} assembleNow={phase === "win-form" && Boolean(result?.success)} />
           <div className="relative mx-auto aspect-square w-full max-w-[390px]"><div className="absolute inset-[4%] rounded-full p-[7px]" style={{ background: `conic-gradient(from 0deg,#f97316 0deg ${degrees}deg,#6d28d9 ${degrees}deg 360deg)` }}><div className="h-full w-full rounded-full border border-white/10 bg-[#070910] p-[9%]"><div className="relative h-full w-full rounded-full"><div className="absolute inset-0 flex flex-col items-center justify-center text-center"><span className="text-[7px] font-black uppercase text-slate-500">Шанс</span><b className="text-3xl font-black sm:text-5xl">{shownChance.toFixed(shownChance < 1 ? 2 : 1)}%</b>{locked && <div className="relative mt-1 h-10 w-10 sm:h-16 sm:w-16"><Image src={locked.image} alt={locked.name} fill className="object-contain" sizes="64px" unoptimized /></div>}<span className="mt-1 text-[6px] font-black tracking-widest text-orange-300">WIN</span><span className="text-[6px] font-black tracking-widest text-violet-300">LOSE</span></div></div></div></div><div className="absolute left-1/2 top-0 z-30 h-full w-1 -translate-x-1/2" style={{ transform: `translateX(-50%) rotate(${angle}deg)`, transformOrigin: "50% 50%", transition: spinning ? `transform ${SPIN_MS}ms cubic-bezier(.08,.72,.12,1)` : "transform .2s ease-out" }}><div className="absolute left-1/2 top-0 h-7 w-[4px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_14px_white] sm:h-11" /></div></div>
           <SelectedCard item={visualTarget} label="ЦЕЛЕВОЙ СКИН" target breakNow={phase === "lose-break" || phase === "win-break"} duration={phase === "lose-break" ? LOSE_MS : BREAK_MS} hidden={phase === "win-form"} />
         </div>
@@ -189,22 +195,32 @@ export default function UpgradePage() {
   </main>;
 }
 
-function SkinExplosion({ item, duration }: { item: Item; duration: number }) {
-  const pieces = Array.from({ length: 70 }, (_, i) => {
-    const angle = (i * 137.508 + (i % 5) * 11) * Math.PI / 180;
-    const distance = 55 + (i % 10) * 13;
-    const size = 6 + (i % 5) * 3;
-    const left = 5 + ((i * 37) % 88);
-    const top = 8 + ((i * 53) % 76);
-    return { i, x: Math.cos(angle) * distance, y: Math.sin(angle) * distance, size, left, top, delay: (i % 9) * 18, rot: ((i * 71) % 540) - 270 };
+function fragmentPieces(count: number, direction: "burst" | "assemble") {
+  return Array.from({ length: count }, (_, i) => {
+    const ray = (i * 137.508 + (i % 7) * 9) * Math.PI / 180;
+    const distance = 48 + (i % 11) * 16;
+    const size = 9 + (i % 4) * 2.5;
+    const left = 7 + ((i * 29) % 82);
+    const top = 10 + ((i * 47) % 70);
+    const spread = direction === "assemble" ? 1 : 1;
+    return { i, x: Math.cos(ray) * distance * spread, y: Math.sin(ray) * distance * .72 * spread, size, left, top, delay: (i % 10) * 32, rot: ((i * 67) % 520) - 260 };
   });
-  return <div className="absolute inset-0 z-20 overflow-visible pointer-events-none">{pieces.map((p) => <span key={p.i} className="zeon-fragment" style={{ width: p.size, height: p.size * (0.65 + (p.i % 3) * .2), left: `${p.left}%`, top: `${p.top}%`, backgroundImage: `url("${item.image}")`, backgroundSize: "100% 100%", backgroundPosition: `${p.left}% ${p.top}%`, clipPath: p.i % 3 === 0 ? "polygon(50% 0,100% 50%,50% 100%,0 50%)" : p.i % 3 === 1 ? "polygon(0 0,100% 18%,72% 100%,8% 78%)" : "polygon(50% 0,100% 100%,0 82%)", animationDelay: `${p.delay}ms`, "--tx": `${p.x}px`, "--ty": `${p.y}px`, "--rot": `${p.rot}deg`, "--d": `${duration}ms` } as CSSProperties}/> )}</div>;
 }
 
-function SelectedCard({ item, label, compact, target, balanceMode, breakNow, formNow, duration, hidden }: { item: Item | null; label: string; compact?: boolean; target?: boolean; balanceMode?: boolean; breakNow?: boolean; formNow?: boolean; duration?: number; hidden?: boolean }) {
+function SkinExplosion({ item, duration }: { item: Item; duration: number }) {
+  const pieces = fragmentPieces(46, "burst");
+  return <div className="absolute inset-0 z-20 overflow-visible pointer-events-none">{pieces.map((p) => <span key={p.i} className="zeon-fragment" style={{ width: p.size, height: p.size * (0.72 + (p.i % 3) * .14), left: `${p.left}%`, top: `${p.top}%`, backgroundImage: `url("${item.image}")`, backgroundSize: "100% 100%", backgroundPosition: `${p.left}% ${p.top}%`, clipPath: p.i % 3 === 0 ? "polygon(50% 0,100% 50%,50% 100%,0 50%)" : p.i % 3 === 1 ? "polygon(0 0,100% 18%,72% 100%,8% 78%)" : "polygon(50% 0,100% 100%,0 82%)", animationDelay: `${p.delay}ms`, "--tx": `${p.x}px`, "--ty": `${p.y}px`, "--rot": `${p.rot}deg`, "--d": `${Math.max(1500, duration - 220)}ms` } as CSSProperties}/> )}</div>;
+}
+
+function SkinAssembly({ item, duration }: { item: Item; duration: number }) {
+  const pieces = fragmentPieces(46, "assemble");
+  return <div className="absolute inset-0 z-30 overflow-visible pointer-events-none">{pieces.map((p) => <span key={p.i} className="zeon-assemble" style={{ width: p.size, height: p.size * (0.72 + (p.i % 3) * .14), left: `${p.left}%`, top: `${p.top}%`, backgroundImage: `url("${item.image}")`, backgroundSize: "100% 100%", backgroundPosition: `${p.left}% ${p.top}%`, clipPath: p.i % 3 === 0 ? "polygon(50% 0,100% 50%,50% 100%,0 50%)" : p.i % 3 === 1 ? "polygon(0 0,100% 18%,72% 100%,8% 78%)" : "polygon(50% 0,100% 100%,0 82%)", animationDelay: `${p.delay}ms`, "--tx": `${p.x}px`, "--ty": `${p.y}px`, "--rot": `${p.rot}deg`, "--d": `${Math.max(1500, duration - 220)}ms` } as CSSProperties}/> )}</div>;
+}
+
+function SelectedCard({ item, label, compact, target, balanceMode, breakNow, formNow, duration, hidden, assembleNow }: { item: Item | null; label: string; compact?: boolean; target?: boolean; balanceMode?: boolean; breakNow?: boolean; formNow?: boolean; duration?: number; hidden?: boolean; assembleNow?: boolean }) {
   const tone = item ? target ? "border-orange-400/30 bg-orange-500/[.05]" : "border-violet-400/30 bg-violet-500/[.06]" : "border-dashed border-white/10 bg-black/20";
   const d = duration || BREAK_MS;
-  return <div className={`text-center transition-opacity duration-300 ${hidden ? "opacity-0" : "opacity-100"}`}><p className="mb-1 text-[7px] font-black uppercase tracking-widest text-slate-500 sm:text-[9px]">{label}</p><div className={`relative mx-auto overflow-visible rounded-xl border ${tone} ${compact ? "h-24 w-full sm:h-32" : "h-28 w-full sm:h-40"}`}><div className="relative h-full overflow-hidden rounded-xl">{!item && <span className="absolute inset-0 flex items-center justify-center text-[8px] text-slate-600">{balanceMode ? "Z-Coin" : "Выбери"}</span>}{item && <div className={`relative h-full w-full ${breakNow ? "zeon-core-break" : ""} ${formNow ? "zeon-form" : ""}`} style={{ "--d": `${d}ms` } as CSSProperties}><Image src={item.image} alt={item.name} fill className="object-contain p-2" sizes="180px" unoptimized/></div>}{item && breakNow && <SkinExplosion item={item} duration={d}/>}</div></div>{item && <div className={`${breakNow ? "zeon-core-break" : ""} ${formNow ? "zeon-form" : ""}`} style={{ "--d": `${d}ms` } as CSSProperties}><p className="mt-1 line-clamp-1 text-[9px] font-black sm:text-xs">{item.name}</p><p className="text-[9px] font-black text-yellow-300 sm:text-xs">{money(item.price)} Z</p></div>}</div>;
+  return <div className={`text-center transition-opacity duration-300 ${hidden ? "opacity-0" : "opacity-100"}`}><p className="mb-1 text-[7px] font-black uppercase tracking-widest text-slate-500 sm:text-[9px]">{label}</p><div className={`relative mx-auto overflow-visible rounded-xl border ${tone} ${compact ? "h-24 w-full sm:h-32" : "h-28 w-full sm:h-40"}`}><div className="relative h-full overflow-hidden rounded-xl">{!item && <span className="absolute inset-0 flex items-center justify-center text-[8px] text-slate-600">{balanceMode ? "Z-Coin" : "Выбери"}</span>}{item && <div className={`relative h-full w-full ${breakNow ? "zeon-core-break" : ""} ${formNow ? "zeon-form" : ""}`} style={{ "--d": `${d}ms` } as CSSProperties}><Image src={item.image} alt={item.name} fill className="object-contain p-2" sizes="180px" unoptimized/></div>}{item && breakNow && <SkinExplosion item={item} duration={d}/>} {item && assembleNow && <SkinAssembly item={item} duration={d}/>}</div></div>{item && <div className={`${breakNow ? "zeon-core-break" : ""} ${formNow ? "zeon-form" : ""}`} style={{ "--d": `${d}ms` } as CSSProperties}><p className="mt-1 line-clamp-1 text-[9px] font-black sm:text-xs">{item.name}</p><p className="text-[9px] font-black text-yellow-300 sm:text-xs">{money(item.price)} Z</p></div>}</div>;
 }
 function ItemCard({ item, active, onClick, disabled }: { item: Item; active: boolean; onClick: () => void; disabled?: boolean }) { return <button type="button" onClick={onClick} disabled={disabled} className={`rounded-lg border p-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-violet-400 bg-violet-500/15" : "border-white/10 bg-black/20 hover:border-white/20"}`}><div className="relative h-14 sm:h-20"><Image src={item.image} alt={item.name} fill className="object-contain" sizes="100px" unoptimized/></div><p className={`line-clamp-1 text-[7px] font-black uppercase ${rarity[item.rarity] || "text-slate-300"}`}>{item.rarity}</p><p className="mt-0.5 line-clamp-1 text-[8px] font-bold">{item.name}</p><p className="text-[8px] font-black text-yellow-300">{money(item.price)} Z</p></button>; }
 function Panel({ title, children }: { title: string; children: ReactNode }) { return <section className="rounded-2xl border border-violet-300/10 bg-[#0b0d15] p-3"><h2 className="mb-2 text-[9px] font-black uppercase tracking-[.16em] text-slate-300">{title}</h2>{children}</section>; }
