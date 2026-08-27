@@ -35,13 +35,13 @@ function makeParticles(seed: number): Particle[] {
 
   return Array.from({ length: 20 }, (_, id) => {
     const angle = next(id * 9 + 1) * Math.PI * 2;
-    const radius = 95 + next(id * 9 + 2) * 175;
+    const radius = 110 + next(id * 9 + 2) * 165;
     return {
       id,
       x: Math.cos(angle) * radius,
       y: Math.sin(angle) * radius,
       rotate: (next(id * 9 + 3) - 0.5) * 220,
-      delay: Math.round(next(id * 9 + 4) * 120),
+      delay: Math.round(next(id * 9 + 4) * 110),
     };
   });
 }
@@ -259,8 +259,7 @@ export default function UpgradePage() {
         </div>
 
         <div className="relative grid min-h-[300px] grid-cols-[.9fr_1.25fr_.9fr] items-center gap-2 sm:min-h-[470px] sm:gap-8">
-          <UpgradeFragmentLayer leftItem={leftFragments} rightItem={rightFragments} winningItem={winningItem} phase={phase} particles={particles} />
-          <WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={phase === "burst" ? leftFragments : winningItem} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} />
+          <WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={phase === "burst" ? leftFragments : phase === "gather" ? winningItem : null} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} fragmentItem={phase === "burst" ? leftFragments : winningItem} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} />
 
           <div className="relative z-10 mx-auto flex w-full max-w-[460px] flex-col items-center">
             <div className="relative h-[250px] w-[250px] sm:h-[390px] sm:w-[390px]">
@@ -278,7 +277,7 @@ export default function UpgradePage() {
             <p className="mt-3 text-center text-[10px] font-black uppercase tracking-[.42em] text-violet-300/55">ZeonGG Upgrade</p>
           </div>
 
-          <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} />
+          <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} />
         </div>
 
         <div className="relative z-20 mx-auto mt-7 max-w-5xl rounded-[24px] border border-violet-400/10 bg-[#0e1120]/70 p-4 shadow-[0_22px_80px_rgba(0,0,0,.18)] sm:p-6">
@@ -361,7 +360,7 @@ function ShardPack({ item, phase, particles }: { item: Item; phase: "burst" | "g
         0%{opacity:0;transform:translate(calc(clamp(260px,70vw,880px) + var(--burst-x) * .55),calc(var(--burst-y) * .55)) rotate(var(--r)) scale(.34);filter:brightness(1.55) saturate(1.22) drop-shadow(0 0 15px rgba(196,181,253,.62))}
         10%{opacity:1;transform:translate(calc(clamp(260px,70vw,880px) + var(--burst-x) * .38),calc(var(--burst-y) * .38)) rotate(calc(var(--r) * .72)) scale(.52)}
         66%{opacity:1;filter:brightness(1.18) saturate(1.08)}
-        100%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03) drop-shadow(0 0 8px rgba(124,58,237,.18))}
+        100%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03) drop-shadow(0 0 8px rgba(124,58,237,.18))}
       }
     `}</style>
   </div>;
