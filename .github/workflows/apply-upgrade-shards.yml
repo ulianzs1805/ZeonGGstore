@@ -17,7 +17,9 @@ jobs:
           ref: terminal
           fetch-depth: 0
       - name: Apply real PNG shard animation
-        run: python3 scripts/fix-upgrade-shards.py
+        run: |
+          python3 scripts/fix-upgrade-shards.py
+          python3 scripts/fix-upgrade-shard-anchors.py
       - name: Check whether the page changed
         id: changed
         run: |
