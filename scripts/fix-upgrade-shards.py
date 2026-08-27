@@ -1,10 +1,11 @@
-# Applied by the repository workflow to keep the upgrade animation as one coherent PNG shattering into pieces.
+# Keep upgrade animation anchored to the actual skin image boxes.
 from pathlib import Path
 import re
 
 p = Path('src/app/upgrade/page.tsx')
 s = p.read_text()
 
+# Radial burst: every shard gets an angle around the full circle.
 particles_re = re.compile(r'function makeParticles\(seed: number\): Particle\[\] \{.*?\n\}', re.S)
 particles_new = '''function makeParticles(seed: number): Particle[] {
   const next = (n: number) => {
@@ -14,13 +15,13 @@ particles_new = '''function makeParticles(seed: number): Particle[] {
 
   return Array.from({ length: 20 }, (_, id) => {
     const angle = next(id * 9 + 1) * Math.PI * 2;
-    const radius = 105 + next(id * 9 + 2) * 155;
+    const radius = 95 + next(id * 9 + 2) * 175;
     return {
       id,
       x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius * 0.72,
-      rotate: (next(id * 9 + 3) - 0.5) * 210,
-      delay: Math.round(next(id * 9 + 4) * 130),
+      y: Math.sin(angle) * radius,
+      rotate: (next(id * 9 + 3) - 0.5) * 220,
+      delay: Math.round(next(id * 9 + 4) * 120),
     };
   });
 }'''
@@ -28,88 +29,70 @@ s, count = particles_re.subn(particles_new, s, count=1)
 if count != 1:
     raise SystemExit('makeParticles block not found')
 
+# The old global layer is no longer used. Shards are rendered inside the exact image box.
 start = s.index('function UpgradeFragmentLayer(')
 end = s.index('function WeaponSlot(', start)
+layer = '''function UpgradeFragmentLayer() { return null; }\n\n'''
+s = s[:start] + layer + s[end:]
 
-replacement = '''function UpgradeFragmentLayer({ leftItem, rightItem, winningItem, phase, particles }: { leftItem: Item | null; rightItem: Item | null; winningItem: Item | null; phase: Phase; particles: Particle[] }) {
-  if (phase === "idle" || particles.length === 0) return null;
-
-  return <div className="pointer-events-none absolute inset-0 z-30 grid grid-cols-[.9fr_1.25fr_.9fr] items-center gap-2 sm:gap-8">
-    <div className="relative h-full">
-      {leftItem && <ShardPack item={leftItem} phase="burst" particles={particles} anchor="left" />}
-      {winningItem && phase === "gather" && <ShardPack item={winningItem} phase="gather" particles={particles} anchor="left" />}
+# Replace WeaponSlot completely so the shard pack shares the exact coordinates of the real skin image.
+start = s.index('function WeaponSlot(')
+end = s.index('function InventoryPanel(', start)
+weapon = '''function WeaponSlot({ item, side, onShuffle, imageHidden, fragmentItem, fragmentMode, particles }: { item: Item | null; side: "left" | "right"; onShuffle: () => void; imageHidden: boolean; fragmentItem?: Item | null; fragmentMode?: "burst" | "gather" | null; particles?: Particle[] }) {
+  return <div className="relative z-10 flex flex-col items-center justify-center gap-3 text-center">
+    <p className="text-[9px] font-black uppercase tracking-[.18em] text-zinc-500 sm:text-xs">{side === "left" ? "ТВОЙ СКИН" : "ЦЕЛЕВОЙ СКИН"}</p>
+    <div className="relative h-20 w-full max-w-[180px] overflow-visible rounded-2xl border border-violet-400/15 bg-[#111424] p-3 shadow-[0_0_30px_rgba(95,48,255,.10)] sm:h-32 sm:max-w-[250px]">
+      {item ? <Image src={item.image} alt={item.name} fill className={`object-contain p-3 drop-shadow-[0_0_20px_rgba(116,65,255,.45)] transition-opacity duration-150 ${imageHidden ? "opacity-0" : "opacity-100"}`} unoptimized /> : <div className="grid h-full place-items-center text-[9px] font-black uppercase tracking-[.14em] text-zinc-600">Выбери предмет</div>}
+      {fragmentItem && fragmentMode && particles && particles.length > 0 && <ShardPack item={fragmentItem} phase={fragmentMode} particles={particles} />}
     </div>
-    <div />
-    <div className="relative h-full">
-      {rightItem && phase === "burst" && <ShardPack item={rightItem} phase="burst" particles={particles} anchor="right" />}
-    </div>
+    <button type="button" onClick={onShuffle} aria-label="Сбросить выбор" disabled={imageHidden} className="grid h-9 w-9 place-items-center rounded-xl border border-violet-400/15 bg-[#171a2b] text-lg text-violet-200 transition hover:bg-violet-500/15 disabled:opacity-50 sm:h-11 sm:w-11">⌘</button>
+    {item ? <div className="max-w-[180px]"><p className="truncate text-[10px] font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)}Z</p></div> : side === "left" ? <p className="text-[9px] text-zinc-600">Можно играть балансом</p> : null}
   </div>;
 }
 
-function ShardPack({ item, phase, particles, anchor }: { item: Item; phase: "burst" | "gather"; particles: Particle[]; anchor: "left" | "right" }) {
+function ShardPack({ item, phase, particles }: { item: Item; phase: "burst" | "gather"; particles: Particle[] }) {
   const safeImage = item.image.replace(/"/g, "%22");
   const cols = 4;
   const rows = 5;
   const tileW = 100 / cols;
   const tileH = 100 / rows;
 
-  const pieces = Array.from({ length: cols * rows }, (_, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x0 = col * tileW;
-    const x1 = (col + 1) * tileW;
-    const y0 = row * tileH;
-    const y1 = (row + 1) * tileH;
-    const clip = `polygon(${x0 + 1.5}% ${y0 + 2.2}%,${x1 - 2.4}% ${y0 + .8}%,${x1 - .9}% ${y1 - 2.1}%,${x0 + 2.1}% ${y1 - .7}%)`;
-    return { index, clip, particle: particles[index % particles.length] };
-  });
-
-  const commonStyle: CSSProperties = {
-    position: "absolute",
-    left: "50%",
-    top: "50%",
-    width: "min(100%, 180px)",
-    height: "80px",
-    transform: "translate(-50%, -50%)",
-  };
-
-  return <div className={`upgrade-shard-pack upgrade-shard-pack-${anchor} upgrade-shard-pack-${phase}`} style={commonStyle}>
-    {pieces.map(({ index, clip, particle }) => {
+  return <div className="pointer-events-none absolute inset-0 z-40 overflow-visible">
+    {Array.from({ length: cols * rows }, (_, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const x0 = col * tileW;
+      const x1 = (col + 1) * tileW;
+      const y0 = row * tileH;
+      const y1 = (row + 1) * tileH;
+      const particle = particles[index % particles.length];
+      const clip = `polygon(${x0 + 1.2}% ${y0 + 1.8}%,${x1 - 1.8}% ${y0 + .6}%,${x1 - .8}% ${y1 - 1.7}%,${x0 + 1.6}% ${y1 - .5}%)`;
       const style: CSSProperties & Record<string, string> = {
-        left: "0px",
-        top: "0px",
-        width: "100%",
-        height: "100%",
         backgroundImage: `url("${safeImage}")`,
         backgroundSize: "contain",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
         clipPath: clip,
-        animationDelay: `${phase === "gather" ? particle.delay : index * 8}ms`,
+        animationDelay: `${phase === "gather" ? particle.delay : index * 7}ms`,
         "--burst-x": `${particle.x}px`,
         "--burst-y": `${particle.y}px`,
         "--r": `${particle.rotate}deg`,
       };
-
-      return <span key={`${item.id}-${anchor}-${phase}-${index}`} className={`upgrade-shard ${phase === "gather" ? "upgrade-shard-gather" : "upgrade-shard-burst"}`} style={style} />;
-    })}<style jsx>{`
-      .upgrade-shard{position:absolute;display:block;will-change:transform,opacity,filter;opacity:0;transform-origin:50% 50%;filter:drop-shadow(0 0 8px rgba(124,58,237,.35))}
-      .upgrade-shard-pack-gather{animation:upgradeShardPackTravel ${GATHER_MS}ms cubic-bezier(.12,.78,.16,1) forwards}
+      return <span key={`${item.id}-${phase}-${index}`} className={`upgrade-shard ${phase === "burst" ? "upgrade-shard-burst" : "upgrade-shard-gather"}`} style={style} />;
+    })}
+    <style jsx>{`
+      .upgrade-shard{position:absolute;inset:0;display:block;opacity:0;will-change:transform,opacity,filter;transform-origin:50% 50%;filter:drop-shadow(0 0 8px rgba(124,58,237,.28))}
       .upgrade-shard-burst{animation:upgradeShardBurst ${BURST_MS}ms cubic-bezier(.08,.78,.12,1) forwards}
       .upgrade-shard-gather{animation:upgradeShardGather ${GATHER_MS}ms cubic-bezier(.12,.78,.16,1) forwards}
-      @keyframes upgradeShardPackTravel{
-        0%{left:calc(100% + 50%);top:50%}
-        100%{left:50%;top:50%}
-      }
       @keyframes upgradeShardBurst{
-        0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(.98);filter:brightness(1.02) saturate(1.02) drop-shadow(0 0 8px rgba(124,58,237,.25))}
-        4%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1.03);filter:brightness(1.9) saturate(1.3) drop-shadow(0 0 16px rgba(196,181,253,.65))}
-        13%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1)}
-        100%{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) rotate(var(--r)) scale(.38);filter:brightness(.72) saturate(.88) drop-shadow(0 0 3px rgba(124,58,237,.12))}
+        0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(.96);filter:brightness(1.04) saturate(1.04)}
+        4%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1.04);filter:brightness(1.85) saturate(1.28) drop-shadow(0 0 16px rgba(196,181,253,.6))}
+        12%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1)}
+        100%{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) rotate(var(--r)) scale(.34);filter:brightness(.72) saturate(.86)}
       }
       @keyframes upgradeShardGather{
-        0%{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) rotate(var(--r)) scale(.38);filter:brightness(1.45) saturate(1.2) drop-shadow(0 0 14px rgba(196,181,253,.6))}
-        10%{opacity:1;transform:translate(calc(var(--burst-x) * .72),calc(var(--burst-y) * .72)) rotate(calc(var(--r) * .72)) scale(.56)}
+        0%{opacity:0;transform:translate(calc(clamp(260px,70vw,880px) + var(--burst-x) * .55),calc(var(--burst-y) * .55)) rotate(var(--r)) scale(.34);filter:brightness(1.55) saturate(1.22) drop-shadow(0 0 15px rgba(196,181,253,.62))}
+        10%{opacity:1;transform:translate(calc(clamp(260px,70vw,880px) + var(--burst-x) * .38),calc(var(--burst-y) * .38)) rotate(calc(var(--r) * .72)) scale(.52)}
         66%{opacity:1;filter:brightness(1.18) saturate(1.08)}
         100%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03) drop-shadow(0 0 8px rgba(124,58,237,.18))}
       }
@@ -118,7 +101,19 @@ function ShardPack({ item, phase, particles, anchor }: { item: Item; phase: "bur
 }
 
 '''
+s = s[:start] + weapon + s[end:]
 
-s = s[:start] + replacement + s[end:]
+# Keep the page calls explicit: burst in both original boxes, gather in the exact left box.
+s = s.replace(
+  '<WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} />',
+  '<WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={phase === "burst" ? leftFragments : winningItem} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} />',
+  1,
+)
+s = s.replace(
+  '<WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} />',
+  '<WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} />',
+  1,
+)
+
 p.write_text(s)
-print('radial shatter and exact left-cell gather fixed')
+print('exact left-cell gather and full radial shatter fixed')
