@@ -1,0 +1,1 @@
+This component is the fixed synchronized fragment animation layer.
