@@ -339,7 +339,7 @@ function ShardPack({ item, phase, particles, anchor }: { item: Item; phase: "bur
   const commonStyle: CSSProperties = {
     position: "absolute",
     left: "50%",
-    top: "50%",
+    top: "calc(50% - 34px)",
     width: "min(100%, 180px)",
     height: "80px",
     transform: "translate(-50%, -50%)",
@@ -370,8 +370,8 @@ function ShardPack({ item, phase, particles, anchor }: { item: Item; phase: "bur
       .upgrade-shard-burst{animation:upgradeShardBurst ${BURST_MS}ms cubic-bezier(.08,.78,.12,1) forwards}
       .upgrade-shard-gather{animation:upgradeShardGather ${GATHER_MS}ms cubic-bezier(.12,.78,.16,1) forwards}
       @keyframes upgradeShardPackTravel{
-        0%{left:calc(100% + 50%);top:50%}
-        100%{left:50%;top:50%}
+        0%{left:calc(288.888% + 16px);top:calc(50% - 34px)}
+        100%{left:50%;top:calc(50% - 34px)}
       }
       @keyframes upgradeShardBurst{
         0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(.98);filter:brightness(1.02) saturate(1.02) drop-shadow(0 0 8px rgba(124,58,237,.25))}
