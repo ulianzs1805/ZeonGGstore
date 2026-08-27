@@ -5,7 +5,6 @@ import re
 p = Path('src/app/upgrade/page.tsx')
 s = p.read_text()
 
-# Radial burst: every shard gets an angle around the full circle.
 particles_re = re.compile(r'function makeParticles\(seed: number\): Particle\[\] \{.*?\n\}', re.S)
 particles_new = '''function makeParticles(seed: number): Particle[] {
   const next = (n: number) => {
@@ -15,13 +14,13 @@ particles_new = '''function makeParticles(seed: number): Particle[] {
 
   return Array.from({ length: 20 }, (_, id) => {
     const angle = next(id * 9 + 1) * Math.PI * 2;
-    const radius = 95 + next(id * 9 + 2) * 175;
+    const radius = 110 + next(id * 9 + 2) * 165;
     return {
       id,
       x: Math.cos(angle) * radius,
       y: Math.sin(angle) * radius,
       rotate: (next(id * 9 + 3) - 0.5) * 220,
-      delay: Math.round(next(id * 9 + 4) * 120),
+      delay: Math.round(next(id * 9 + 4) * 110),
     };
   });
 }'''
@@ -29,13 +28,10 @@ s, count = particles_re.subn(particles_new, s, count=1)
 if count != 1:
     raise SystemExit('makeParticles block not found')
 
-# The old global layer is no longer used. Shards are rendered inside the exact image box.
 start = s.index('function UpgradeFragmentLayer(')
 end = s.index('function WeaponSlot(', start)
-layer = '''function UpgradeFragmentLayer() { return null; }\n\n'''
-s = s[:start] + layer + s[end:]
+s = s[:start] + 'function UpgradeFragmentLayer() { return null; }\n\n' + s[end:]
 
-# Replace WeaponSlot completely so the shard pack shares the exact coordinates of the real skin image.
 start = s.index('function WeaponSlot(')
 end = s.index('function InventoryPanel(', start)
 weapon = '''function WeaponSlot({ item, side, onShuffle, imageHidden, fragmentItem, fragmentMode, particles }: { item: Item | null; side: "left" | "right"; onShuffle: () => void; imageHidden: boolean; fragmentItem?: Item | null; fragmentMode?: "burst" | "gather" | null; particles?: Particle[] }) {
@@ -94,7 +90,7 @@ function ShardPack({ item, phase, particles }: { item: Item; phase: "burst" | "g
         0%{opacity:0;transform:translate(calc(clamp(260px,70vw,880px) + var(--burst-x) * .55),calc(var(--burst-y) * .55)) rotate(var(--r)) scale(.34);filter:brightness(1.55) saturate(1.22) drop-shadow(0 0 15px rgba(196,181,253,.62))}
         10%{opacity:1;transform:translate(calc(clamp(260px,70vw,880px) + var(--burst-x) * .38),calc(var(--burst-y) * .38)) rotate(calc(var(--r) * .72)) scale(.52)}
         66%{opacity:1;filter:brightness(1.18) saturate(1.08)}
-        100%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03) drop-shadow(0 0 8px rgba(124,58,237,.18))}
+        100%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03) drop-shadow(0 0 8px rgba(124,58,237,.18))}
       }
     `}</style>
   </div>;
@@ -103,17 +99,20 @@ function ShardPack({ item, phase, particles }: { item: Item; phase: "burst" | "g
 '''
 s = s[:start] + weapon + s[end:]
 
-# Keep the page calls explicit: burst in both original boxes, gather in the exact left box.
-s = s.replace(
-  '<WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} />',
-  '<WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={phase === "burst" ? leftFragments : winningItem} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} />',
-  1,
-)
-s = s.replace(
-  '<WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} />',
-  '<WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} />',
-  1,
+s = re.sub(
+    r'<UpgradeFragmentLayer[^>]*/>\s*',
+    '',
+    s,
+    count=1,
 )
 
+left_call = '<WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating}'
+left_repl = '<WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={phase === "burst" ? leftFragments : phase === "gather" ? winningItem : null} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles}'
+s = s.replace(left_call, left_repl, 1)
+
+right_call = '<WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating}'
+right_repl = '<WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles}'
+s = s.replace(right_call, right_repl, 1)
+
 p.write_text(s)
-print('exact left-cell gather and full radial shatter fixed')
+print('fixed exact left-cell gather and radial burst')
