@@ -1,3 +1,4 @@
+# Applied by the repository workflow to keep the upgrade animation on real PNG shards.
 from pathlib import Path
 import re
 
