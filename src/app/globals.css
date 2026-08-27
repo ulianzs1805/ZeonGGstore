@@ -72,3 +72,35 @@ img {
     background-position: 74% 52% !important;
   }
 }
+
+/* Upgrader fragment fix: one four-piece image pack must actually reach the left slot. */
+.upgrade-quarter-gather {
+  animation: upgrade-quarter-gather-fixed 2200ms cubic-bezier(.16,.78,.18,1) forwards !important;
+}
+
+.upgrade-quarter-gather:nth-child(1) { --fixed-x: -29px; --fixed-y: -18px; }
+.upgrade-quarter-gather:nth-child(2) { --fixed-x: 29px; --fixed-y: -18px; }
+.upgrade-quarter-gather:nth-child(3) { --fixed-x: -29px; --fixed-y: 18px; }
+.upgrade-quarter-gather:nth-child(4) { --fixed-x: 29px; --fixed-y: 18px; }
+
+@keyframes upgrade-quarter-gather-fixed {
+  0% {
+    left: calc(89% - 29px);
+    opacity: 0;
+    transform: translate(var(--burst-x), var(--burst-y)) rotate(var(--r)) scale(.52);
+    filter: brightness(1.45) saturate(1.18);
+  }
+  10% {
+    opacity: 1;
+  }
+  58% {
+    opacity: 1;
+    filter: brightness(1.15) saturate(1.08);
+  }
+  100% {
+    left: calc(11% - 29px);
+    opacity: 1;
+    transform: translate(var(--fixed-x), var(--fixed-y)) rotate(0deg) scale(1);
+    filter: brightness(1.35) saturate(1.1);
+  }
+}
