@@ -312,39 +312,52 @@ function UpgradeFragmentLayer({ leftItem, rightItem, winningItem, phase, particl
 function QuarterPack({ item, side, phase, particles }: { item: Item; side: "left" | "right"; phase: "burst" | "gather"; particles: Particle[] }) {
   const safeImage = item.image.replace(/"/g, "%22");
   const quarters = [[0, 0], [1, 0], [0, 1], [1, 1]] as const;
-  const originX = side === "left" ? "calc(11% - 29px)" : "calc(89% - 29px)";
+  const originX = side === "left" ? "calc(11% - 37px)" : "calc(89% - 37px)";
+  const targetX = "calc(11% - 37px)";
 
   return <>{quarters.map(([qx, qy], index) => {
     const particle = particles[index];
     const horizontal = side === "left" ? -1 : 1;
-    const burstX = horizontal * (70 + Math.abs(particle.x));
-    const burstY = particle.y;
-    const gatherX = -330 + (qx ? 29 : -29);
-    const gatherY = qy ? 18 : -18;
+    const burstX = horizontal * (145 + Math.abs(particle.x) * 1.35);
+    const burstY = particle.y * 1.35 + (qy ? 24 : -24);
     const style: CSSProperties & Record<string, string> = {
       left: originX,
-      top: "calc(50% - 18px)",
-      width: "58px",
-      height: "36px",
+      top: "calc(50% - 23px)",
+      width: "74px",
+      height: "46px",
       backgroundImage: `url("${safeImage}")`,
       backgroundSize: "200% 200%",
       backgroundPosition: `${qx * 100}% ${qy * 100}%`,
       backgroundRepeat: "no-repeat",
-      animationDelay: `${phase === "gather" ? particle.delay : 0}ms`,
+      animationDelay: `${phase === "gather" ? particle.delay : index * 24}ms`,
       "--burst-x": `${burstX}px`,
       "--burst-y": `${burstY}px`,
-      "--gather-x": `${gatherX}px`,
-      "--gather-y": `${gatherY}px`,
-      "--r": `${particle.rotate}deg`,
+      "--r": `${particle.rotate * 1.7}deg`,
+      "--from-left": originX,
+      "--to-left": targetX,
+      "--target-y": `${qy ? 0 : -46}px`,
     };
 
     return <span key={`${item.id}-${side}-${phase}-${index}`} className={`upgrade-quarter ${phase === "gather" ? "upgrade-quarter-gather" : "upgrade-quarter-burst"}`} style={style} />;
   })}<style jsx>{`
-    .upgrade-quarter{position:absolute;display:block;border-radius:3px;border:1px solid rgba(255,255,255,.2);box-shadow:0 0 14px rgba(255,255,255,.1),0 0 22px rgba(124,58,237,.4);will-change:transform,opacity,filter;opacity:0}
-    .upgrade-quarter-burst{animation:upgradeQuarterBurst ${BURST_MS}ms cubic-bezier(.12,.72,.16,1) forwards}
-    .upgrade-quarter-gather{animation:upgradeQuarterGather ${GATHER_MS}ms cubic-bezier(.16,.78,.18,1) forwards}
-    @keyframes upgradeQuarterBurst{0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.2) saturate(1.05)}8%{opacity:1}54%{opacity:.95;filter:brightness(1.08) saturate(1.08)}100%{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) rotate(var(--r)) scale(.58);filter:brightness(.9) saturate(.9)}}
-    @keyframes upgradeQuarterGather{0%{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) rotate(var(--r)) scale(.52);filter:brightness(1.4) saturate(1.18)}14%{opacity:1}68%{opacity:1;filter:brightness(1.18) saturate(1.1)}100%{opacity:1;transform:translate(var(--gather-x),var(--gather-y)) rotate(0deg) scale(1);filter:brightness(1.35) saturate(1.1)}}
+    .upgrade-quarter{position:absolute;display:block;border-radius:4px;border:1px solid rgba(255,255,255,.26);box-shadow:0 0 18px rgba(255,255,255,.16),0 0 32px rgba(124,58,237,.46),inset 0 0 0 1px rgba(0,0,0,.18);will-change:left,transform,opacity,filter;opacity:0;transform-origin:50% 50%}
+    @media(min-width:640px){.upgrade-quarter{width:110px!important;height:68px!important}}
+    .upgrade-quarter-burst{animation:upgradeQuarterBurst ${BURST_MS}ms cubic-bezier(.08,.8,.12,1) forwards}
+    .upgrade-quarter-gather{animation:upgradeQuarterGather ${GATHER_MS}ms cubic-bezier(.14,.78,.18,1) forwards}
+    @keyframes upgradeQuarterBurst{
+      0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(.82);filter:brightness(1.05) saturate(1.05)}
+      7%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1.18);filter:brightness(2.35) saturate(1.45)}
+      13%{opacity:1;transform:translate(0,0) rotate(0deg) scale(.96);filter:brightness(1.55) saturate(1.2)}
+      22%{opacity:1;transform:translate(calc(var(--burst-x) * .24),calc(var(--burst-y) * .24)) rotate(calc(var(--r) * .24)) scale(1.05);filter:brightness(1.22) saturate(1.12)}
+      68%{opacity:.9;filter:brightness(1.02) saturate(1.04)}
+      100%{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) rotate(var(--r)) scale(.48);filter:brightness(.8) saturate(.88)}
+    }
+    @keyframes upgradeQuarterGather{
+      0%{left:var(--from-left);opacity:0;transform:translate(calc(var(--burst-x) * .78),calc(var(--burst-y) * .78)) rotate(var(--r)) scale(.5);filter:brightness(1.45) saturate(1.22)}
+      12%{opacity:1}
+      64%{left:var(--to-left);opacity:1;transform:translate(0,var(--target-y)) rotate(calc(var(--r) * .12)) scale(.96);filter:brightness(1.18) saturate(1.08)}
+      100%{left:var(--to-left);opacity:1;transform:translate(0,var(--target-y)) rotate(0deg) scale(1);filter:brightness(1.28) saturate(1.12)}
+    }
   `}</style></>;
 }
 
