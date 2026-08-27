@@ -35,7 +35,13 @@ function makeParticles(seed: number): Particle[] {
   return Array.from({ length: 20 }, (_, id) => {
     const angle = next(id * 9 + 1) * Math.PI * 2;
     const radius = 110 + next(id * 9 + 2) * 165;
-    return { id, x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, rotate: (next(id * 9 + 3) - 0.5) * 220, delay: Math.round(next(id * 9 + 4) * 110) };
+    return {
+      id,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+      rotate: (next(id * 9 + 3) - 0.5) * 220,
+      delay: Math.round(next(id * 9 + 4) * 110),
+    };
   });
 }
 
@@ -252,7 +258,7 @@ export default function UpgradePage() {
         </div>
 
         <div className="relative grid min-h-[300px] grid-cols-[.9fr_1.25fr_.9fr] items-center gap-2 sm:min-h-[470px] sm:gap-8">
-          <WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={phase === "burst" ? leftFragments : phase === "gather" ? winningItem : null} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} fragmentItem={phase === "burst" ? leftFragments : phase === "gather" ? winningItem : null} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} fragmentItem={phase === "burst" ? leftFragments : phase === "gather" ? winningItem : null} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} fragmentItem={phase === "burst" ? leftFragments : winningItem} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} />
+          <WeaponSlot item={displayInput} side="left" onShuffle={() => { setOptimisticInput(null); setInputId(""); }} imageHidden={animating} fragmentItem={phase === "burst" ? leftFragments : phase === "gather" ? winningItem : null} fragmentMode={phase === "burst" ? "burst" : phase === "gather" ? "gather" : null} particles={particles} />
 
           <div className="relative z-10 mx-auto flex w-full max-w-[460px] flex-col items-center">
             <div className="relative h-[250px] w-[250px] sm:h-[390px] sm:w-[390px]">
@@ -270,7 +276,7 @@ export default function UpgradePage() {
             <p className="mt-3 text-center text-[10px] font-black uppercase tracking-[.42em] text-violet-300/55">ZeonGG Upgrade</p>
           </div>
 
-          <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} />
+          <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} fragmentItem={phase === "burst" ? rightFragments : null} fragmentMode={phase === "burst" ? "burst" : null} particles={particles} />
         </div>
 
         <div className="relative z-20 mx-auto mt-7 max-w-5xl rounded-[24px] border border-violet-400/10 bg-[#0e1120]/70 p-4 shadow-[0_22px_80px_rgba(0,0,0,.18)] sm:p-6">
@@ -329,7 +335,7 @@ function ShardPack({ item, phase, particles }: { item: Item; phase: "burst" | "g
       .upgrade-shard-burst{animation:upgradeShardBurst ${BURST_MS}ms cubic-bezier(.08,.78,.12,1) forwards}
       .upgrade-shard-gather{animation:upgradeShardGather ${GATHER_MS}ms cubic-bezier(.12,.78,.16,1) forwards}
       @keyframes upgradeShardBurst{0%{opacity:0;transform:translate(0,0) rotate(0deg) scale(.96)}4%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1.04);filter:brightness(1.85) saturate(1.28) drop-shadow(0 0 16px rgba(196,181,253,.6))}12%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1)}100%{opacity:0;transform:translate(var(--burst-x),var(--burst-y)) rotate(var(--r)) scale(.34);filter:brightness(.72) saturate(.86)}}
-      @keyframes upgradeShardGather{0%{opacity:0;transform:translate(calc(var(--burst-x) * .22),calc(var(--burst-y) * .22)) rotate(var(--r)) scale(.34);filter:brightness(1.7) saturate(1.28) drop-shadow(0 0 15px rgba(196,181,253,.62))}12%{opacity:1;transform:translate(calc(var(--burst-x) * .15),calc(var(--burst-y) * .15)) rotate(calc(var(--r) * .62)) scale(.58)}70%{opacity:1;filter:brightness(1.2) saturate(1.1)}100%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03)}}
+      @keyframes upgradeShardGather{0%{opacity:0;transform:translate(calc(var(--burst-x) * .22),calc(var(--burst-y) * .22)) rotate(var(--r)) scale(.34);filter:brightness(1.7) saturate(1.28) drop-shadow(0 0 15px rgba(196,181,253,.62))}12%{opacity:1;transform:translate(calc(var(--burst-x) * .15),calc(var(--burst-y) * .15)) rotate(calc(var(--r) * .62)) scale(.58)}70%{opacity:1;filter:brightness(1.2) saturate(1.1)}100%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03)}}12%{opacity:1;transform:translate(calc(var(--burst-x) * .15),calc(var(--burst-y) * .15)) rotate(calc(var(--r) * .62)) scale(.58)}70%{opacity:1;filter:brightness(1.2) saturate(1.1)}100%{opacity:0;transform:translate(0,0) rotate(0deg) scale(1);filter:brightness(1.03) saturate(1.03)}}
     `}</style>
   </div>;
 }
