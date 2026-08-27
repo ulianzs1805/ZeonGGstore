@@ -84,7 +84,6 @@ function ShardPack({ item, side, phase, particles }: { item: Item; side: "left" 
     return <span key={`${item.id}-${side}-${phase}-${index}`} className={`upgrade-shard ${phase === "gather" ? "upgrade-shard-gather" : "upgrade-shard-burst"}`} style={style} />;
   })}<style jsx>{`
     .upgrade-shard{position:absolute;display:block;border:1px solid rgba(255,255,255,.14);box-shadow:0 0 9px rgba(255,255,255,.12),0 0 20px rgba(124,58,237,.34);will-change:left,top,transform,opacity,filter;opacity:0;transform-origin:50% 50%}
-    @media(min-width:640px){.upgrade-shard{width:52px!important;height:25px!important}.upgrade-shard{background-size:400% 500%!important}.upgrade-shard{left:var(--desktop-left)}}
     .upgrade-shard-burst{animation:upgradeShardBurst ${BURST_MS}ms cubic-bezier(.08,.8,.12,1) forwards}
     .upgrade-shard-gather{animation:upgradeShardGather ${GATHER_MS}ms cubic-bezier(.14,.78,.18,1) forwards}
     @keyframes upgradeShardBurst{
