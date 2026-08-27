@@ -81,24 +81,18 @@ export default function UpgradePage() {
     return inv as Item[];
   }
 
-  useEffect(() => {
-    load().catch((e) => setError(e.message)).finally(() => setLoading(false));
-  }, []);
+  useEffect(() => { load().catch((e) => setError(e.message)).finally(() => setLoading(false)); }, []);
 
   function chooseInput(id: string) {
     if (busy || spinning || animating) return;
     setOptimisticInput(null);
     setInputId((current) => current === id ? "" : id);
-    setTopUp(0);
-    setError("");
-    setResult(null);
+    setTopUp(0); setError(""); setResult(null);
   }
 
   function chooseTarget(id: string) {
     if (busy || spinning || animating) return;
-    setTargetId(id);
-    setError("");
-    setResult(null);
+    setTargetId(id); setError(""); setResult(null);
   }
 
   function setChancePreset(percent: number) {
@@ -129,54 +123,29 @@ export default function UpgradePage() {
       return current + 2160 + ((landing - norm + 360) % 360);
     });
     setSpinning(true);
-    window.setTimeout(() => {
-      setSpinning(false);
-      void playResult(data);
-    }, SPIN_MS + 100);
+    window.setTimeout(() => { setSpinning(false); void playResult(data); }, SPIN_MS + 100);
   }
 
   async function playResult(data: Result) {
-    setResult(data);
-    setParticles(makeParticles(Date.now()));
-    setPhase("burst");
-    setAnimating(true);
-
+    setResult(data); setParticles(makeParticles(Date.now())); setPhase("burst"); setAnimating(true);
     if (data.success) window.setTimeout(() => setPhase("gather"), BURST_MS);
-
     window.setTimeout(() => {
       if (data.success && data.resultItem) {
         const won = data.resultItem;
         setOptimisticInput(won);
         setInventory((current) => {
           const oldId = data.inputItem?.id || attempt?.input?.id;
-          const filtered = current.filter((item) => item.id !== oldId && item.id !== won.id && item.name.toLowerCase() !== won.name.toLowerCase());
-          return [won, ...filtered];
+          return [won, ...current.filter((item) => item.id !== oldId && item.id !== won.id && item.name.toLowerCase() !== won.name.toLowerCase())];
         });
-        setInputId(won.id);
-        setTargetId("");
-        setTopUp(0);
-        setAttempt(null);
-        setParticles([]);
-        setPhase("idle");
-        setAnimating(false);
+        setInputId(won.id); setTargetId(""); setTopUp(0); setAttempt(null); setParticles([]); setPhase("idle"); setAnimating(false);
         void load().then((fresh) => {
           const serverWinner = fresh.find((item) => item.id === won.id) || fresh.find((item) => item.name.toLowerCase() === won.name.toLowerCase());
-          if (serverWinner) {
-            setOptimisticInput(serverWinner);
-            setInputId(serverWinner.id);
-          }
+          if (serverWinner) { setOptimisticInput(serverWinner); setInputId(serverWinner.id); }
         }).catch((e) => setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря"));
       } else {
         const oldId = data.inputItem?.id || attempt?.input?.id;
         if (oldId) setInventory((current) => current.filter((item) => item.id !== oldId));
-        setOptimisticInput(null);
-        setInputId("");
-        setTargetId("");
-        setTopUp(0);
-        setAttempt(null);
-        setParticles([]);
-        setPhase("idle");
-        setAnimating(false);
+        setOptimisticInput(null); setInputId(""); setTargetId(""); setTopUp(0); setAttempt(null); setParticles([]); setPhase("idle"); setAnimating(false);
         void load().catch((e) => setError(e instanceof Error ? e.message : "Ошибка синхронизации инвентаря"));
       }
     }, data.success ? BREAK_MS : BURST_MS);
@@ -184,36 +153,19 @@ export default function UpgradePage() {
 
   async function upgrade() {
     if (!target || total <= 0 || target.price <= total || topUp > balance || busy || spinning || animating) return;
-    setBusy(true);
-    setError("");
-    setResult(null);
-    setAttempt({ input, target, chance });
+    setBusy(true); setError(""); setResult(null); setAttempt({ input, target, chance });
     try {
-      const r = await fetch("/api/upgrader", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: input?.id || "", targetId: target.id, balanceTopUp: topUp, idempotencyKey: crypto.randomUUID() }),
-      });
+      const r = await fetch("/api/upgrader", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: input?.id || "", targetId: target.id, balanceTopUp: topUp, idempotencyKey: crypto.randomUUID() }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Апгрейд не выполнен");
-      setBalance((v) => Math.max(0, v - topUp));
-      startRoulette(d);
-    } catch (e) {
-      setAttempt(null);
-      setError(e instanceof Error ? e.message : "Ошибка апгрейда");
-    } finally {
-      setBusy(false);
-    }
+      setBalance((v) => Math.max(0, v - topUp)); startRoulette(d);
+    } catch (e) { setAttempt(null); setError(e instanceof Error ? e.message : "Ошибка апгрейда"); }
+    finally { setBusy(false); }
   }
 
   const availableTargets = useMemo(() => {
     const seen = new Set<string>();
-    return targets.filter((x) => {
-      const key = x.name.trim().toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return total > 0 ? x.price > total : true;
-    });
+    return targets.filter((x) => { const key = x.name.trim().toLowerCase(); if (seen.has(key)) return false; seen.add(key); return total > 0 ? x.price > total : true; });
   }, [targets, total]);
 
   const leftFragmentItem = animating && result ? displayInput : null;
@@ -240,33 +192,23 @@ export default function UpgradePage() {
                   <div className="absolute inset-x-0 top-[31%] text-center text-4xl font-black sm:text-6xl">{shownChance.toFixed(1)}%</div>
                   <div className="absolute inset-x-0 bottom-[17%] text-center text-[9px] font-black tracking-[.24em] text-zinc-500">WIN / LOSE</div>
                 </div>
-                <div className="absolute left-1/2 top-[-10px] z-30 h-[calc(100%+20px)] w-1 -translate-x-1/2" style={{ transform: `translateX(-50%) rotate(${angle}deg)`, transformOrigin: "50% 50%", transition: spinning ? `transform ${SPIN_MS}ms cubic-bezier(.08,.72,.12,1)` : "transform .25s ease-out" }}>
-                  <div className="absolute left-1/2 top-0 h-12 w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,.8)]" />
-                </div>
+                <div className="absolute left-1/2 top-[-10px] z-30 h-[calc(100%+20px)] w-1 -translate-x-1/2" style={{ transform: `translateX(-50%) rotate(${angle}deg)`, transformOrigin: "50% 50%", transition: spinning ? `transform ${SPIN_MS}ms cubic-bezier(.08,.72,.12,1)` : "transform .25s ease-out" }}><div className="absolute left-1/2 top-0 h-12 w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,.8)]" /></div>
               </div>
             </div>
             <p className="mt-3 text-center text-[10px] font-black uppercase tracking-[.42em] text-violet-300/55">ZeonGG Upgrade</p>
           </div>
           <WeaponSlot item={displayTarget} side="right" onShuffle={() => setTargetId("")} imageHidden={animating} />
         </div>
-
         <div className="relative z-20 mx-auto mt-7 max-w-5xl rounded-[24px] border border-violet-400/10 bg-[#0e1120]/70 p-4 shadow-[0_22px_80px_rgba(0,0,0,.18)] sm:p-6">
           <div className="mb-3 flex items-center justify-between text-sm font-black text-zinc-300 sm:text-lg"><span>Добавить баланс</span><span className="text-[#f2b84d]">{money(topUp)} Z</span></div>
           <div className="rounded-2xl border border-white/5 bg-[#151827] px-4 py-4"><input type="range" min="0" max={Math.max(0, Math.floor(balance * 100) / 100)} step="0.01" value={topUp} onChange={(e) => setTopUp(Math.max(0, Math.min(balance, Number(e.target.value))))} disabled={spinning || busy || animating} className="h-3 w-full accent-[#7b46ff]" /></div>
-          <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-2xl border border-violet-400/10 bg-[#121525] text-xs font-black sm:text-sm">
-            <button type="button" onClick={() => setTopUp(0)} className="min-h-14 border-r border-violet-400/10 text-[#ff9b43]">ϟ</button>
-            {[30, 50, 70].map((p) => <button key={p} type="button" onClick={() => setChancePreset(p)} className="min-h-14 border-r border-violet-400/10 transition hover:bg-violet-500/10">{p}%</button>)}
-            {[2, 5, 10].map((m) => <button key={m} type="button" onClick={() => chooseMultiplier(m)} className="min-h-14 border-r border-violet-400/10 last:border-r-0 transition hover:bg-orange-400/10">X{m}</button>)}
-          </div>
+          <div className="mt-4 grid grid-cols-7 overflow-hidden rounded-2xl border border-violet-400/10 bg-[#121525] text-xs font-black sm:text-sm"><button type="button" onClick={() => setTopUp(0)} className="min-h-14 border-r border-violet-400/10 text-[#ff9b43]">ϟ</button>{[30,50,70].map((p) => <button key={p} type="button" onClick={() => setChancePreset(p)} className="min-h-14 border-r border-violet-400/10 transition hover:bg-violet-500/10">{p}%</button>)}{[2,5,10].map((m) => <button key={m} type="button" onClick={() => chooseMultiplier(m)} className="min-h-14 border-r border-violet-400/10 last:border-r-0 transition hover:bg-orange-400/10">X{m}</button>)}</div>
           <button type="button" onClick={() => void upgrade()} disabled={!target || total <= 0 || target.price <= total || topUp > balance || busy || spinning || animating} className="mt-5 w-full rounded-2xl bg-[linear-gradient(90deg,#6730df,#9138f5,#ff7f2a)] py-5 text-base font-black tracking-[.16em] text-white shadow-[0_14px_40px_rgba(105,52,255,.24)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45">{animating ? "АНИМАЦИЯ..." : spinning ? "АПГРЕЙД ИДЁТ..." : busy ? "ОБРАБОТКА..." : "СДЕЛАТЬ АПГРЕЙД"}</button>
           {result && !animating && <div className={`mt-4 rounded-xl p-3 text-center text-sm font-black ${result.success ? "border border-emerald-400/25 bg-emerald-500/10 text-emerald-300" : "border border-red-400/25 bg-red-500/10 text-red-300"}`}>{result.success ? "УСПЕШНЫЙ АПГРЕЙД" : "АПГРЕЙД НЕ УДАЛСЯ"}</div>}
           {error && <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-center text-sm text-red-200">{error}</div>}
         </div>
       </section>
-      <section className="grid gap-4 bg-[#090b16] px-4 py-6 md:grid-cols-2 sm:px-8 sm:py-8">
-        <InventoryPanel title="ТВОЙ ИНВЕНТАРЬ" empty="Выбери скин или используй только баланс" items={inventory} active={inputId} onPick={chooseInput} />
-        <InventoryPanel title="ДОСТУПНЫЕ ЦЕЛИ" empty={total > 0 ? "Нет более дорогих целей" : "Сначала выбери скин или добавь баланс"} items={availableTargets} active={targetId} onPick={chooseTarget} />
-      </section>
+      <section className="grid gap-4 bg-[#090b16] px-4 py-6 md:grid-cols-2 sm:px-8 sm:py-8"><InventoryPanel title="ТВОЙ ИНВЕНТАРЬ" empty="Выбери скин или используй только баланс" items={inventory} active={inputId} onPick={chooseInput} /><InventoryPanel title="ДОСТУПНЫЕ ЦЕЛИ" empty={total > 0 ? "Нет более дорогих целей" : "Сначала выбери скин или добавь баланс"} items={availableTargets} active={targetId} onPick={chooseTarget} /></section>
     </div>
   </main>;
 }
@@ -282,9 +224,6 @@ function WeaponSlot({ item, side, onShuffle, imageHidden }: { item: Item | null;
   </div>;
 }
 
-function InventoryPanel({ title, empty, items, active, onPick }: { title: string; empty: string; items: Item[]; active: string; onPick: (id: string) => void }) {
-  return <section className="rounded-[24px] border border-violet-400/10 bg-[#101322] p-4 shadow-[0_18px_60px_rgba(0,0,0,.16)] sm:p-5">
-    <h2 className="mb-5 text-sm font-black uppercase tracking-[.16em] text-zinc-300 sm:text-lg">{title}</h2>
-    {items.length === 0 ? <div className="rounded-xl border border-white/5 p-6 text-sm text-zinc-500">{empty}</div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{items.map((item) => <button key={item.id} type="button" onClick={() => onPick(item.id)} className={`rounded-2xl border p-3 text-left transition ${active === item.id ? "border-violet-400 bg-violet-500/10 shadow-[0_0_28px_rgba(108,58,255,.16)]" : "border-white/5 bg-[#0c0f1b] hover:border-violet-400/35"}`}><div className="relative mb-2 h-20"><Image src={item.image} alt={item.name} fill className="object-contain" unoptimized /></div><p className="truncate text-[8px] font-black uppercase tracking-wider text-violet-300/60">{item.rarity}</p><p className="truncate text-xs font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p></button>)}</div>}
-  </section>;
+function InventoryPanel({ title, empty, items, active, onPick }: { title: string; empty: string; items: Item[]; active: string; onPick: (id:string) => void }) {
+  return <section className="rounded-[24px] border border-violet-400/10 bg-[#101322] p-4 shadow-[0_18px_60px_rgba(0,0,0,.16)] sm:p-5"><h2 className="mb-5 text-sm font-black uppercase tracking-[.16em] text-zinc-300 sm:text-lg">{title}</h2>{items.length === 0 ? <div className="rounded-xl border border-white/5 p-6 text-sm text-zinc-500">{empty}</div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{items.map((item) => <button key={item.id} type="button" onClick={() => onPick(item.id)} className={`rounded-2xl border p-3 text-left transition ${active === item.id ? "border-violet-400 bg-violet-500/10 shadow-[0_0_28px_rgba(108,58,255,.16)]" : "border-white/5 bg-[#0c0f1b] hover:border-violet-400/35"}`}><div className="relative mb-2 h-20"><Image src={item.image} alt={item.name} fill className="object-contain" unoptimized /></div><p className="truncate text-[8px] font-black uppercase tracking-wider text-violet-300/60">{item.rarity}</p><p className="truncate text-xs font-black sm:text-sm">{item.name}</p><p className="mt-1 text-xs font-black text-[#f2b84d] sm:text-sm">{money(item.price)} Z</p></button>)}</div>}</section>;
 }
