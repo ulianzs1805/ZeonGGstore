@@ -10,7 +10,6 @@ const CONFIG = {
 } as const;
 
 type Difficulty = keyof typeof CONFIG;
-
 type TowerGameState = {
   id: string; difficulty: string; stake: number; currentAmount: number; floor: number;
   minesPerFloor: number; saveAvailable: boolean; errors: number; status: string;
@@ -19,20 +18,14 @@ type TowerGameState = {
 function validDifficulty(value: unknown): value is Difficulty {
   return value === "easy" || value === "medium" || value === "hard";
 }
-
-function roundAmount(value: number) {
-  return Math.max(0, Math.floor(value));
-}
-
+function roundAmount(value: number) { return Math.max(0, Math.floor(value)); }
 function multiplierFor(game: Pick<TowerGameState, "stake" | "currentAmount">) {
   return game.stake > 0 ? Math.max(1, game.currentAmount / game.stake) : 1;
 }
-
 function factorFor(difficulty: Difficulty, mines: number) {
   const config = CONFIG[difficulty];
   return Math.pow(config.maxMultiplier, 1 / config.floors) ** (mines / 7);
 }
-
 function generateMines(count: number) {
   const positions = Array.from({ length: 8 }, (_, index) => index);
   for (let i = positions.length - 1; i > 0; i -= 1) {
@@ -41,21 +34,13 @@ function generateMines(count: number) {
   }
   return positions.slice(0, count).sort((a, b) => a - b);
 }
-
 function serialize(game: TowerGameState) {
   const config = CONFIG[game.difficulty as Difficulty];
   return {
-    gameId: game.id,
-    difficulty: game.difficulty,
-    stake: game.stake,
-    currentAmount: game.currentAmount,
-    floor: game.floor,
-    floors: config?.floors ?? 0,
-    mines: game.minesPerFloor,
-    saveAvailable: game.saveAvailable,
-    errors: game.errors,
-    multiplier: multiplierFor(game),
-    status: game.status,
+    gameId: game.id, difficulty: game.difficulty, stake: game.stake,
+    currentAmount: game.currentAmount, floor: game.floor, floors: config?.floors ?? 0,
+    mines: game.minesPerFloor, saveAvailable: game.saveAvailable, errors: game.errors,
+    multiplier: multiplierFor(game), status: game.status,
   };
 }
 
@@ -72,7 +57,6 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
-
   const body = await request.json().catch(() => null) as {
     action?: unknown; difficulty?: unknown; stake?: unknown; gameId?: unknown;
     cell?: unknown; mines?: unknown; idempotencyKey?: unknown;
@@ -91,7 +75,6 @@ export async function POST(request: Request) {
       const difficulty = body.difficulty;
       const stake = typeof body?.stake === "number" && Number.isFinite(body.stake) ? roundAmount(body.stake) : 0;
       if (stake < 10) throw new Error("MIN_STAKE_10");
-
       const result = await prisma.$transaction(async (tx) => {
         const active = await tx.towerGame.findFirst({ where: { userId: user.id, status: "ACTIVE" }, select: { id: true } });
         if (active) throw new Error("ACTIVE_GAME_EXISTS");
@@ -99,9 +82,10 @@ export async function POST(request: Request) {
         if (!freshUser || freshUser.balance < stake) throw new Error("INSUFFICIENT_BALANCE");
         const updated = await tx.user.updateMany({ where: { id: user.id, balance: { gte: stake } }, data: { balance: { decrement: stake } } });
         if (updated.count !== 1) throw new Error("BALANCE_CHANGED");
+        const mines = CONFIG[difficulty].fixedMines ?? 1;
         const game = await tx.towerGame.create({ data: {
           userId: user.id, difficulty, stake, currentAmount: stake, floor: 0,
-          minesPerFloor: CONFIG[difficulty].fixedMines ?? 1, minePositions: "",
+          minesPerFloor: mines, minePositions: JSON.stringify(generateMines(mines)),
           saveAvailable: difficulty === "hard", errors: 0, status: "ACTIVE",
         } });
         await tx.operation.create({ data: { userId: user.id, type: "TOWER_START", amount: -stake, status: "SUCCESS", label: `Башня: старт ${difficulty}`, idempotencyKey } });
@@ -142,8 +126,9 @@ export async function POST(request: Request) {
       if (cell < 0 || cell > 7) throw new Error("INVALID_CELL");
       if (game.floor >= config.floors) throw new Error("GAME_ALREADY_FINISHED");
 
-      const minePositions = game.minePositions ? JSON.parse(game.minePositions) as number[] : generateMines(mines);
-      if (minePositions.length !== mines) throw new Error("GAME_STATE_INVALID");
+      let minePositions: number[];
+      try { minePositions = JSON.parse(game.minePositions || "[]") as number[]; } catch { throw new Error("GAME_STATE_INVALID"); }
+      if (minePositions.length !== mines || minePositions.some((p) => p < 0 || p > 7)) throw new Error("GAME_STATE_INVALID");
       const hitMine = minePositions.includes(cell);
       const nowAmount = game.currentAmount;
       const currentFloor = game.floor;
@@ -157,12 +142,10 @@ export async function POST(request: Request) {
       if (hitMine) {
         nextErrors += 1;
         if (difficulty === "hard" && game.saveAvailable) {
-          nextAmount = roundAmount(nowAmount * 0.25);
-          nextSave = false;
+          nextAmount = roundAmount(nowAmount * 0.25); nextSave = false;
           message = "Мина. Сейв использован: -75% от текущей суммы. Можно продолжить.";
         } else if (difficulty === "hard") {
-          nextAmount = roundAmount(nowAmount * 0.25);
-          nextStatus = "LOST";
+          nextAmount = roundAmount(nowAmount * 0.25); nextStatus = "LOST";
           message = "Вторая серьёзная ошибка. Сейвов больше нет.";
         } else {
           nextAmount = roundAmount(nowAmount * 0.75);
@@ -177,12 +160,12 @@ export async function POST(request: Request) {
         }
       }
 
+      const nextMinePositions = nextStatus === "ACTIVE" ? JSON.stringify(generateMines(mines)) : "";
       const guarded = await tx.towerGame.updateMany({
         where: { id: game.id, userId: user.id, status: "ACTIVE", floor: currentFloor, currentAmount: nowAmount, errors: game.errors, saveAvailable: game.saveAvailable },
-        data: { currentAmount: nextAmount, floor: nextFloor, minesPerFloor: mines, minePositions: nextStatus === "ACTIVE" && !hitMine ? "" : "", errors: nextErrors, saveAvailable: nextSave, status: nextStatus },
+        data: { currentAmount: nextAmount, floor: nextFloor, minesPerFloor: mines, minePositions: nextMinePositions, errors: nextErrors, saveAvailable: nextSave, status: nextStatus },
       });
       if (guarded.count !== 1) throw new Error("GAME_STATE_CHANGED");
-
       await tx.operation.create({ data: { userId: user.id, type: hitMine ? "TOWER_MINE" : "TOWER_STEP", amount: 0, status: hitMine && nextStatus === "LOST" ? "FAILED" : "SUCCESS", label: `Башня: ${hitMine ? "мина" : "этаж"} ${currentFloor + 1}`, idempotencyKey } });
 
       let balance: number | null = null;
@@ -191,11 +174,9 @@ export async function POST(request: Request) {
         balance = (await tx.user.findUnique({ where: { id: user.id }, select: { balance: true } }))?.balance ?? null;
         await tx.operation.create({ data: { userId: user.id, type: "TOWER_REWARD", amount: nextAmount, status: "SUCCESS", label: `Башня: выплата ${nextAmount} Z`, idempotencyKey: `${idempotencyKey}:reward` } });
       }
-
-      const publicGame = { ...serialize({ ...game, currentAmount: nextAmount, floor: nextFloor, minesPerFloor: mines, saveAvailable: nextSave, errors: nextErrors, status: nextStatus }), minePositions, revealedMine: hitMine ? cell : null, message };
+      const publicGame = { ...serialize({ ...game, currentAmount: nextAmount, floor: nextFloor, minesPerFloor: mines, saveAvailable: nextSave, errors: nextErrors, status: nextStatus }), revealedMine: hitMine ? cell : null, message };
       return { game: publicGame, balance, payout: nextStatus === "COMPLETED" ? nextAmount : 0 };
     });
-
     return NextResponse.json({ ok: true, ...result });
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "TOWER_FAILED";
