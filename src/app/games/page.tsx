@@ -20,6 +20,17 @@ export default function GamesPage() {
             <span className="mt-6 inline-flex items-center gap-2 text-sm font-black text-white">Играть <span aria-hidden="true">→</span></span>
           </div>
         </Link>
+
+        <Link href="/games/tower" className="group relative overflow-hidden rounded-[28px] border border-amber-300/20 bg-gradient-to-br from-amber-500/15 via-[#171722] to-[#0a0d14] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.28)] transition hover:-translate-y-1 hover:border-amber-300/45">
+          <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-amber-500/15 blur-3xl" />
+          <div className="relative">
+            <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-400/10 text-2xl">🏰</div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-300">Доступно сейчас</p>
+            <h2 className="mt-2 text-2xl font-black text-white">Башня</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">Поднимайся по этажам, избегай мин и забирай выигрыш с растущим множителем.</p>
+            <span className="mt-6 inline-flex items-center gap-2 text-sm font-black text-white">Играть <span aria-hidden="true">→</span></span>
+          </div>
+        </Link>
       </section>
     </main>
   );
