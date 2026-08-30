@@ -101,8 +101,8 @@ export async function POST(request: Request) {
 
       const inputItem = item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: balanceTopUp };
       if (!success) {
-        await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_CASE", amount: 0, status: "OPEN", label: JSON.stringify({ lostItemName: inputItem.name, lostItemImage: inputItem.image, lostItemRarity: inputItem.rarity, lostValue: totalInputValue }), idempotencyKey: `${idempotencyKey}:recovery` } });
-        return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: idempotencyKey, image: "/cases/CaseRecoceryUpgrade.jpeg", lostValue: totalInputValue } };
+        const recoveryOperation = await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_CASE", amount: 0, status: "OPEN", label: JSON.stringify({ lostItemName: inputItem.name, lostItemImage: inputItem.image, lostItemRarity: inputItem.rarity, lostValue: totalInputValue }), idempotencyKey: `${idempotencyKey}:recovery` } });
+        return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: recoveryOperation.id, image: "/cases/CaseRecoceryUpgrade.jpeg", lostValue: totalInputValue } };
       }
 
       const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
