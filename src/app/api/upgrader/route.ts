@@ -5,7 +5,7 @@ import { ensureSystemCatalog } from "@/lib/system-catalog";
 import { prisma } from "@/lib/prisma";
 import { resolveSkinImage } from "@/lib/skin-image";
 
-const MIN_CHANCE = 25;
+const MIN_CHANCE = 0.01;
 const MAX_CHANCE = 100;
 
 function chanceFor(inputValue: number, targetValue: number) {
