@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import RecoveryCaseModal from "@/components/upgrader/RecoveryCaseModal";
 
 type RecoveryCase = { id: string; lostValue: number; image?: string };
-
 type Reward = { id: string; name: string; image: string; price: number; rarity?: string };
 
 export default function RecoveryCaseWatcher() {
@@ -25,7 +24,7 @@ export default function RecoveryCaseWatcher() {
           if (active && !next) setRecoveryCase(null);
         }
       } catch {
-        // Recovery UI must never break the upgrader if the polling request fails.
+        // Recovery UI must never break the upgrader if polling fails.
       } finally {
         if (active) timer = setTimeout(check, 1200);
       }
@@ -48,6 +47,7 @@ export default function RecoveryCaseWatcher() {
       onClose={() => {
         setDismissedId(recoveryCase.id);
         setRecoveryCase(null);
+        window.location.reload();
       }}
     />
   );
