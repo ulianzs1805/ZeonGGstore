@@ -5,8 +5,6 @@ import { ensureSystemCatalog } from "@/lib/system-catalog";
 import { prisma } from "@/lib/prisma";
 import { resolveSkinImage } from "@/lib/skin-image";
 
-// The upgrader must never go below 25%. Any higher ratio is still calculated
-// from the real ZeonGGStore price of the chosen item/target.
 const MIN_CHANCE = 25;
 const MAX_CHANCE = 100;
 
@@ -44,23 +42,17 @@ export async function GET() {
     prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
   ]);
 
-  return NextResponse.json({
-    inventory: uniqueItems(inventory).map(publicItem),
-    targets: uniqueItems(drops).map(publicItem),
-    balance: balance?.balance ?? 0,
-  });
+  return NextResponse.json({ inventory: uniqueItems(inventory).map(publicItem), targets: uniqueItems(drops).map(publicItem), balance: balance?.balance ?? 0 });
 }
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
-
   const body = await request.json().catch(() => null) as { itemId?: unknown; targetId?: unknown; idempotencyKey?: unknown; balanceTopUp?: unknown } | null;
   const itemId = typeof body?.itemId === "string" ? body.itemId : "";
   const targetId = typeof body?.targetId === "string" ? body.targetId : "";
   const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.slice(0, 100) : "";
   const balanceTopUp = typeof body?.balanceTopUp === "number" && Number.isFinite(body.balanceTopUp) ? Math.floor(body.balanceTopUp * 100) / 100 : 0;
-
   if (!idempotencyKey) return NextResponse.json({ error: "IDEMPOTENCY_KEY_REQUIRED" }, { status: 400 });
   if (!targetId) return NextResponse.json({ error: "TARGET_REQUIRED" }, { status: 400 });
   if (balanceTopUp < 0) return NextResponse.json({ error: "INVALID_BALANCE_TOP_UP" }, { status: 400 });
@@ -68,7 +60,8 @@ export async function POST(request: Request) {
   const previous = await prisma.operation.findUnique({ where: { idempotencyKey } });
   if (previous) {
     const reward = previous.status === "SUCCESS" ? await prisma.operation.findUnique({ where: { idempotencyKey: `${idempotencyKey}:reward` }, include: { item: true } }) : null;
-    return NextResponse.json({ ok: previous.status === "SUCCESS", replay: true, status: previous.status, resultItem: reward?.item ? publicItem(reward.item) : null });
+    const recovery = previous.status === "FAILED" ? await prisma.operation.findUnique({ where: { idempotencyKey: `${idempotencyKey}:recovery` } }) : null;
+    return NextResponse.json({ ok: previous.status === "SUCCESS", replay: true, status: previous.status, resultItem: reward?.item ? publicItem(reward.item) : null, recoveryCase: recovery ? { id: recovery.id, image: "/cases/CaseRecoceryUpgrade.jpeg" } : null });
   }
 
   await ensureSystemCatalog(prisma);
@@ -80,7 +73,6 @@ export async function POST(request: Request) {
         tx.drop.findFirst({ where: { id: targetId, case: { environment: "SYSTEM", isActive: true } }, select: { id: true, name: true, rarity: true, image: true, price: true } }),
         tx.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
       ]);
-
       if (itemId && !item) throw new Error("ITEMS_NOT_AVAILABLE");
       if (!target) throw new Error("TARGET_NOT_FOUND");
       if (!freshUser) throw new Error("USER_NOT_FOUND");
@@ -100,7 +92,6 @@ export async function POST(request: Request) {
         const consumed = await tx.inventoryItem.updateMany({ where: { id: item.id, userId: user.id, soldAt: null }, data: { soldAt: now } });
         if (consumed.count !== 1) throw new Error("ITEMS_CHANGED");
       }
-
       if (balanceTopUp > 0) {
         const updatedUser = await tx.user.updateMany({ where: { id: user.id, balance: { gte: balanceTopUp } }, data: { balance: { decrement: balanceTopUp } } });
         if (updatedUser.count !== 1) throw new Error("BALANCE_CHANGED");
@@ -109,14 +100,15 @@ export async function POST(request: Request) {
       await tx.operation.create({ data: { userId: user.id, type: success ? "UPGRADE_WIN" : "UPGRADE_LOSS", label: success ? `Апгрейд → ${target.name}` : `Апгрейд → ${target.name} (неудача)`, amount: -totalInputValue, status: success ? "SUCCESS" : "FAILED", idempotencyKey } });
 
       const inputItem = item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: balanceTopUp };
-      if (!success) return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue };
+      if (!success) {
+        await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_CASE", amount: 0, status: "OPEN", label: JSON.stringify({ lostItemName: inputItem.name, lostItemImage: inputItem.image, lostItemRarity: inputItem.rarity, lostValue: totalInputValue }), idempotencyKey: `${idempotencyKey}:recovery` } });
+        return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: idempotencyKey, image: "/cases/CaseRecoceryUpgrade.jpeg", lostValue: totalInputValue } };
+      }
 
       const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
       await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_REWARD", itemId: resultItem.id, label: `Получен ${target.name}`, amount: target.price, status: "SUCCESS", idempotencyKey: `${idempotencyKey}:reward` } });
-
-      return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem), inputItem, inputValue, balanceTopUp, totalInputValue };
+      return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem), inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: null };
     });
-
     return NextResponse.json(result);
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "UPGRADE_FAILED";
