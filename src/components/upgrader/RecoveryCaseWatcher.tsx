@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import RecoveryCaseModal from "./RecoveryCaseModal";
 
-type Item = { id: string; name: string; image: string; price: number; rarity?: string };
 type Recovery = { id: string; lostValue: number; image?: string };
 
 export default function RecoveryCaseWatcher() {
@@ -19,7 +18,7 @@ export default function RecoveryCaseWatcher() {
       const data = await response.json();
       if (data.recoveryCase) setRecovery(data.recoveryCase);
     } catch {
-      // The upgrader itself remains usable if the recovery check fails.
+      // The upgrader remains usable if the recovery check fails.
     }
   }, [pathname]);
 
@@ -35,7 +34,6 @@ export default function RecoveryCaseWatcher() {
     <RecoveryCaseModal
       caseId={recovery.id}
       lostValue={recovery.lostValue}
-      onReward={(_item: Item) => setRecovery(null)}
       onClose={() => setRecovery(null)}
     />
   );
