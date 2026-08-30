@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import AppChrome from "./components/layout/AppChrome";
+import RecoveryCaseWatcher from "@/components/upgrader/RecoveryCaseWatcher";
 
 const LOGO_PATH = "/AFED0327-AB02-4E23-9FCC-B94940A08A4C.png";
 
@@ -39,7 +40,10 @@ export default function RootLayout({
     <html lang="ru">
       <body className="antialiased">
         <Providers>
-          <AppChrome>{children}</AppChrome>
+          <AppChrome>
+            {children}
+            <RecoveryCaseWatcher />
+          </AppChrome>
         </Providers>
       </body>
     </html>
