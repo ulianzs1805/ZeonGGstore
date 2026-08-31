@@ -8,9 +8,15 @@ import { resolveSkinImage } from "@/lib/skin-image";
 const MIN_CHANCE = 0.01;
 const MAX_CHANCE = 100;
 
+/**
+ * One canonical upgrade formula used by the server.
+ * The chance is the input value as a percentage of the target value.
+ * Example: 923 -> 13000 = 7.1%.
+ */
 function chanceFor(inputValue: number, targetValue: number) {
   if (!Number.isFinite(inputValue) || !Number.isFinite(targetValue) || inputValue <= 0 || targetValue <= 0) return MIN_CHANCE;
-  return Math.max(MIN_CHANCE, Math.min(MAX_CHANCE, (inputValue / targetValue) * 100));
+  const raw = (inputValue / targetValue) * 100;
+  return Math.max(MIN_CHANCE, Math.min(MAX_CHANCE, raw));
 }
 
 function publicItem(item: { id: string; name: string; rarity: string; image: string; price: number }) {
@@ -61,7 +67,7 @@ export async function POST(request: Request) {
   if (previous) {
     const reward = previous.status === "SUCCESS" ? await prisma.operation.findUnique({ where: { idempotencyKey: `${idempotencyKey}:reward` }, include: { item: true } }) : null;
     const recovery = previous.status === "FAILED" ? await prisma.operation.findUnique({ where: { idempotencyKey: `${idempotencyKey}:recovery` } }) : null;
-    return NextResponse.json({ ok: previous.status === "SUCCESS", replay: true, status: previous.status, resultItem: reward?.item ? publicItem(reward.item) : null, recoveryCase: recovery ? { id: recovery.id, image: "/cases/CaseRecoceryUpgrade.jpeg" } : null });
+    return NextResponse.json({ ok: previous.status === "SUCCESS", replay: true, status: previous.status, resultItem: reward?.item ? publicItem(reward.item) : null, recoveryCase: recovery ? { id: recovery.id, image: "/cases/CaseRecovery.png" } : null });
   }
 
   await ensureSystemCatalog(prisma);
@@ -102,7 +108,7 @@ export async function POST(request: Request) {
       const inputItem = item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: balanceTopUp };
       if (!success) {
         const recoveryOperation = await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_CASE", amount: 0, status: "OPEN", label: JSON.stringify({ lostItemName: inputItem.name, lostItemImage: inputItem.image, lostItemRarity: inputItem.rarity, lostValue: totalInputValue }), idempotencyKey: `${idempotencyKey}:recovery` } });
-        return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: recoveryOperation.id, image: "/cases/CaseRecoceryUpgrade.jpeg", lostValue: totalInputValue } };
+        return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: recoveryOperation.id, image: "/cases/CaseRecovery.png", lostValue: totalInputValue } };
       }
 
       const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
