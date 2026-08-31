@@ -4,8 +4,20 @@ import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { resolveSkinImage } from "@/lib/skin-image";
 
-const CASE_IMAGE = "/cases/CaseRecoceryUpgrade.jpeg";
+const CASE_IMAGE = "/cases/recovery-body.svg";
+const RECOVERY_MIN_MULTIPLIER = 0.75;
+const RECOVERY_MAX_MULTIPLIER = 1.15;
+const REEL_SIZE = 15;
 const publicItem = (item: { id: string; name: string; rarity: string; image: string; price: number }) => ({ id: item.id, name: item.name, rarity: item.rarity, image: resolveSkinImage(item.name, item.image), price: Number(item.price) || 0 });
+
+function shuffle<T>(items: T[]) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = randomInt(i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -34,14 +46,31 @@ export async function POST(request: Request) {
       try { meta = JSON.parse(op.label || "{}"); } catch {}
       const lostValue = Number(meta.lostValue) || 0;
       if (lostValue <= 0) throw new Error("RECOVERY_VALUE_INVALID");
-      const drops = await tx.drop.findMany({ where: { case: { environment: "SYSTEM", isActive: true }, price: { gte: lostValue * 0.45, lte: lostValue * 1.15 } }, orderBy: [{ price: "asc" }, { name: "asc" }], select: { id: true, name: true, rarity: true, image: true, price: true } });
+
+      const drops = await tx.drop.findMany({
+        where: {
+          case: { environment: "SYSTEM", isActive: true },
+          price: { gte: lostValue * RECOVERY_MIN_MULTIPLIER, lte: lostValue * RECOVERY_MAX_MULTIPLIER },
+        },
+        orderBy: [{ price: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, rarity: true, image: true, price: true },
+      });
       if (!drops.length) throw new Error("RECOVERY_POOL_EMPTY");
-      const index = randomInt(drops.length);
-      const target = drops[index];
+
+      const shuffled = shuffle(drops);
+      const target = shuffled[0];
+      const reelPool = shuffle(drops).slice(0, Math.min(REEL_SIZE, drops.length));
+      if (!reelPool.some((item) => item.id === target.id)) {
+        reelPool[reelPool.length - 1] = target;
+      }
+      const targetIndex = Math.min(reelPool.length - 1, 10);
+      [reelPool[targetIndex], reelPool[reelPool.length - 1]] = [reelPool[reelPool.length - 1], reelPool[targetIndex]];
+      const reelItems = reelPool.map((item, index) => ({ ...publicItem(item), id: `${item.id}-${index}` }));
+
       const item = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
       await tx.operation.update({ where: { id: op.id }, data: { status: "CONSUMED", itemId: item.id } });
       await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_REWARD", itemId: item.id, amount: Math.round(target.price), status: "SUCCESS", label: `Кейс отыгрыша → ${target.name}`, idempotencyKey: key } });
-      return { recoveryCaseId: op.id, resultItem: publicItem(item), lostValue };
+      return { recoveryCaseId: op.id, resultItem: publicItem(item), reelItems, reelTargetIndex: targetIndex, lostValue };
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error: unknown) {
