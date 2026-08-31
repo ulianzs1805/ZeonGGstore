@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "node scripts/fix-upgrade-chance.mjs",
     "build": "rm -rf .next && prisma db push && next build",
     "start": "next start",
     "lint": "eslint"
