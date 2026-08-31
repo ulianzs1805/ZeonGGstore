@@ -6,13 +6,18 @@ import RecoveryCaseModal from "@/components/upgrader/RecoveryCaseModal";
 type RecoveryCase = { id: string; lostValue: number; image?: string };
 type Reward = { id: string; name: string; image: string; price: number; rarity?: string };
 
+// The upgrade result animation is ~4.2s. Recovery must not cover it before the drop reaches the result.
+const RECOVERY_DELAY_MS = 4400;
+
 export default function RecoveryCaseWatcher() {
   const [recoveryCase, setRecoveryCase] = useState<RecoveryCase | null>(null);
   const [dismissedId, setDismissedId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let revealTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingId: string | null = null;
 
     const check = async () => {
       try {
@@ -20,22 +25,36 @@ export default function RecoveryCaseWatcher() {
         if (response.ok) {
           const data = await response.json();
           const next = data.recoveryCase as RecoveryCase | null;
-          if (active && next && next.id !== dismissedId) setRecoveryCase(next);
-          if (active && !next) setRecoveryCase(null);
+
+          if (active && next && next.id !== dismissedId && next.id !== pendingId && !recoveryCase) {
+            pendingId = next.id;
+            revealTimer = setTimeout(() => {
+              if (!active) return;
+              setRecoveryCase(next);
+              pendingId = null;
+            }, RECOVERY_DELAY_MS);
+          }
+
+          if (active && !next) {
+            if (revealTimer) clearTimeout(revealTimer);
+            pendingId = null;
+            setRecoveryCase(null);
+          }
         }
       } catch {
         // Recovery UI must never break the upgrader if polling fails.
       } finally {
-        if (active) timer = setTimeout(check, 1200);
+        if (active) pollTimer = setTimeout(check, 1200);
       }
     };
 
     void check();
     return () => {
       active = false;
-      if (timer) clearTimeout(timer);
+      if (pollTimer) clearTimeout(pollTimer);
+      if (revealTimer) clearTimeout(revealTimer);
     };
-  }, [dismissedId]);
+  }, [dismissedId, recoveryCase]);
 
   if (!recoveryCase) return null;
 
