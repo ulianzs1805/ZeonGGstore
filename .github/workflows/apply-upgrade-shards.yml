@@ -20,6 +20,7 @@ jobs:
         run: |
           python3 scripts/fix-upgrade-shards.py
           python3 scripts/fix-upgrade-shard-anchors.py
+          node scripts/fix-upgrade-chance.mjs
       - name: Check whether the page changed
         id: changed
         run: |
