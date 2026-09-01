@@ -1,7 +1,8 @@
 import type { CaseItem } from "./types";
 
 export const TRACK_GAP = 14;
-export const SLOT_COUNT = 28;
+// Keep a long recovery-case track so cards never run out during the spin.
+export const SLOT_COUNT = 60;
 export const CARD_WIDTH = 180;
 export const CARD_STEP = CARD_WIDTH + TRACK_GAP;
 
