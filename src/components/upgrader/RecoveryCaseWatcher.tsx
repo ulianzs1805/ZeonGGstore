@@ -16,6 +16,9 @@ export default function RecoveryCaseWatcher() {
   const [recovery, setRecovery] = useState<Recovery | null>(null);
   const revealTimerRef = useRef<number | null>(null);
   const pendingIdRef = useRef<string | null>(null);
+  // A GET request can finish after the user has already opened/closed the case.
+  // Never resurrect that consumed recovery operation from a stale response.
+  const dismissedIdRef = useRef<string | null>(null);
 
   const clearRevealTimer = useCallback(() => {
     if (revealTimerRef.current !== null) {
@@ -34,9 +37,14 @@ export default function RecoveryCaseWatcher() {
       const nextRecovery = data.recoveryCase as Recovery | null;
       if (!nextRecovery) return;
 
+      // Ignore an old in-flight GET result for a recovery case that was already
+      // consumed/closed. A newer recovery gets a new id and is still accepted.
+      if (dismissedIdRef.current === nextRecovery.id) return;
       if (pendingIdRef.current === nextRecovery.id || recovery?.id === nextRecovery.id) return;
+
       pendingIdRef.current = nextRecovery.id;
       revealTimerRef.current = window.setTimeout(() => {
+        if (dismissedIdRef.current === nextRecovery.id) return;
         setRecovery(nextRecovery);
         revealTimerRef.current = null;
       }, RECOVERY_REVEAL_DELAY_MS);
@@ -64,9 +72,14 @@ export default function RecoveryCaseWatcher() {
 
   return (
     <RecoveryCaseModal
+      key={recovery.id}
       caseId={recovery.id}
       lostValue={recovery.lostValue}
-      onClose={() => setRecovery(null)}
+      onClose={() => {
+        dismissedIdRef.current = recovery.id;
+        clearRevealTimer();
+        setRecovery(null);
+      }}
     />
   );
 }
