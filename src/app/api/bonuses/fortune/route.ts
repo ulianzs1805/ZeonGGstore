@@ -23,7 +23,9 @@ const wheel: readonly WheelReward[] = [
   { type: "SAFE_OPEN", label: "Safe Open", icon: "◉", weight: 9 },
   { type: "DOUBLE_DROP", label: "Double Drop", icon: "2×", weight: 12 },
 ];
-const letters = ["Z", "E", "O", "N"] as const;
+
+const letterSlots = ["Z", "E", "O", "N", "G1", "G2"] as const;
+type LetterSlot = (typeof letterSlots)[number];
 const depositRewards = [
   { amount: 50, label: "Пополнение от 50 Z-Coin", weight: 18 },
   { amount: 100, label: "Пополнение от 100 Z-Coin", weight: 14 },
@@ -35,18 +37,20 @@ const depositRewards = [
 const json = (value: unknown) => JSON.stringify(value);
 
 async function getLetterState(userId: string) {
-  const spins = await prisma.operation.findMany({ where: { userId, type: "FORTUNE_SPIN" }, select: { label: true }, orderBy: { createdAt: "desc" }, take: 100 });
-  const collected = new Set<string>(); let completed = false;
+  const spins = await prisma.operation.findMany({ where: { userId, type: "FORTUNE_SPIN" }, select: { label: true }, orderBy: { createdAt: "desc" }, take: 200 });
+  const collected = new Set<LetterSlot>();
   for (const spin of spins) {
     if (!spin.label) continue;
     try {
-      const data = JSON.parse(spin.label) as { metadata?: { letter?: string; zeonSecretUnlocked?: boolean } };
-      const letter = data.metadata?.letter;
-      if (typeof letter === "string" && letters.includes(letter as (typeof letters)[number])) collected.add(letter);
-      if (data.metadata?.zeonSecretUnlocked) completed = true;
+      const data = JSON.parse(spin.label) as { metadata?: { letter?: string; slotId?: string } };
+      const slotId = data.metadata?.slotId;
+      if (typeof slotId === "string" && letterSlots.includes(slotId as LetterSlot)) collected.add(slotId as LetterSlot);
+      const legacyLetter = data.metadata?.letter;
+      if (legacyLetter === "Z" || legacyLetter === "E" || legacyLetter === "O" || legacyLetter === "N") collected.add(legacyLetter);
     } catch {}
   }
-  return { collected: letters.filter((letter) => collected.has(letter)), completed };
+  const collectedSlots = letterSlots.filter((slot) => collected.has(slot));
+  return { collected: collectedSlots, completed: collectedSlots.length === letterSlots.length };
 }
 
 async function getCases() {
@@ -59,7 +63,7 @@ export async function GET() {
   const cases = await getCases();
   const bonusInventory = await prisma.operation.findMany({ where: { userId: user.id, type: { in: ["FORTUNE_DEPOSIT", "FORTUNE_BONUS"] }, status: "UNUSED" }, orderBy: { createdAt: "desc" }, take: 30 });
   const letterState = await getLetterState(user.id);
-  return NextResponse.json({ wheel, cases, depositRewards, bonusInventory, letterState, word: "Zeon" });
+  return NextResponse.json({ wheel, cases, depositRewards, bonusInventory, letterState, word: "ZEONGG", letterSlots });
 }
 
 export async function POST(request: Request) {
@@ -72,8 +76,10 @@ export async function POST(request: Request) {
   if (existing?.type === "FORTUNE_SPIN") return NextResponse.json({ ok: true, ...JSON.parse(existing.label || "{}"), replay: true });
 
   const cases = await getCases();
-  let reward: WheelReward = weightedPick(wheel.map((item) => ({ item, weight: item.weight })));
-  let sectorIndex = 0;
+  const currentLetters = await getLetterState(user.id);
+  const eligibleWheel = currentLetters.completed ? wheel.filter((item) => item.type !== "ZEON_SECRET") : wheel;
+  let reward: WheelReward = weightedPick(eligibleWheel.map((item) => ({ item, weight: item.weight })));
+  let sectorIndex = wheel.findIndex((item) => item.type === reward.type);
   let rewardValue: number | null = null;
   let caseId: string | null = null;
   let label = reward.label;
@@ -94,13 +100,29 @@ export async function POST(request: Request) {
     rewardValue = selected.amount; label = selected.label;
     metadata = { bonusType: "DEPOSIT_REWARD", mode, minimumDeposit: selected.amount, chanceWeight: selected.weight, note: "Чем выше требуемое пополнение, тем ниже его шанс." };
   } else {
-    sectorIndex = wheel.findIndex((item) => item.type === reward.type);
     if (reward.type === "FREE_CASE" && !cases.length) return NextResponse.json({ error: "Сейчас нет доступных кейсов." }, { status: 409 });
     if (reward.type === "ZEON_SECRET") {
-      const state = await getLetterState(user.id); const missing = letters.filter((letter) => !state.collected.includes(letter));
-      const letter = missing.length ? missing[Math.floor(Math.random() * missing.length)] : null; const nextCollected = letter ? [...state.collected, letter] : state.collected;
-      const completed = letters.every((item) => nextCollected.includes(item)); metadata = { bonusType: reward.type, mode, letter, word: "Zeon", collectedLetters: nextCollected, zeonSecretUnlocked: completed };
-      label = letter ? `Буква «${letter}» для Zeon Secret` : "Zeon Secret уже собран"; if (completed) label = "Zeon Secret открыт — слово Zeon собрано!";
+      const missing = letterSlots.filter((slot) => !currentLetters.collected.includes(slot));
+      const slotId = missing[Math.floor(Math.random() * missing.length)];
+      const displayLetter = slotId.startsWith("G") ? "G" : slotId;
+      const nextCollected = [...currentLetters.collected, slotId];
+      const completed = letterSlots.every((slot) => nextCollected.includes(slot));
+      let completionReward: number | null = null;
+      if (completed) completionReward = 50 + Math.floor(Math.random() * 451);
+      metadata = { bonusType: reward.type, mode, letter: displayLetter, slotId, word: "ZEONGG", collectedLetters: nextCollected, zeonggUnlocked: completed, completionReward };
+      label = completed ? `ZEONGG собрано! +${completionReward} Z-Coin` : `Буква «${displayLetter}» получена`;
+      if (completed && completionReward) {
+        rewardValue = completionReward;
+        await prisma.$transaction(async (tx) => {
+          const lockedUser = await tx.user.findUnique({ where: { id: user.id }, select: { balance: true } });
+          if (!lockedUser) throw new Error("USER_NOT_FOUND");
+          const newBalance = lockedUser.balance + completionReward;
+          await tx.user.update({ where: { id: user.id }, data: { balance: newBalance } });
+          await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: completionReward, status: "SUCCESS" } });
+          await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Награда за сбор слова ZEONGG: ${completionReward} Z-Coin`, amount: completionReward, status: "SUCCESS", idempotencyKey: `zeongg-reward:${idempotencyKey}` } });
+          await tx.notification.create({ data: { userId: user.id, type: "ZCOIN_GRANT", title: "ZEONGG собрано!", body: `Вам начислено ${completionReward} Z-Coin.` } });
+        });
+      }
     } else if (reward.type === "DEPOSIT_RANDOM_SKIN") {
       const drops = await prisma.drop.findMany({ where: { environment: "SYSTEM", case: { isActive: true } }, select: { id: true, name: true, rarity: true, image: true, price: true } });
       if (!drops.length) return NextResponse.json({ error: "Сейчас нет доступных скинов." }, { status: 409 });
@@ -122,5 +144,5 @@ export async function POST(request: Request) {
   await prisma.operation.create({ data: { userId: user.id, type: "FORTUNE_SPIN", label: json(result), amount: rewardValue ?? 0, status: "SUCCESS", idempotencyKey } });
   await prisma.operation.create({ data: { userId: user.id, type: mode === "DEPOSIT" || mode === "CASE" || reward.type === "DEPOSIT_RANDOM_SKIN" ? "FORTUNE_DEPOSIT" : "FORTUNE_BONUS", label: json({ ...metadata, displayLabel: label }), amount: rewardValue ?? 0, status: "UNUSED", idempotencyKey: `fortune-bonus-${idempotencyKey}` } });
   const letterState = await getLetterState(user.id);
-  return NextResponse.json({ ok: true, ...result, letterState, word: "Zeon" });
+  return NextResponse.json({ ok: true, ...result, letterState, word: "ZEONGG", letterSlots });
 }
