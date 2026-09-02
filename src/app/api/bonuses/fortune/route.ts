@@ -10,7 +10,7 @@ type InnerItem = { key: string; title: string; subtitle?: string; image?: string
 
 const wheel: readonly WheelReward[] = [
   { type: "ZEON_SECRET", label: "ZEONGG Secret", icon: "Z", weight: 10 },
-  { type: "DEPOSIT_RANDOM_SKIN", label: "Скин за пополнение", icon: "◈", weight: 12 },
+  { type: "DEPOSIT_BONUS", label: "Депозит +5–35%", icon: "%", weight: 12 },
   { type: "FREE_CASE", label: "Бесплатный кейс", icon: "▣", weight: 17 },
   { type: "ZCOIN_RAIN", label: "Z-Coin Rain", icon: "Z¢", weight: 16 },
   { type: "Z_BOOST", label: "+25% к следующей награде", icon: "+25%", weight: 13 },
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const completed = letterSlots.every((slot) => next.includes(slot));
     const letter = slotId.startsWith("G") ? "G" : slotId;
     const completionReward = completed ? 50 + Math.floor(Math.random() * 451) : null;
-    innerRoulette = { items: letterSlots.map((slot) => ({ key: slot, title: slot.startsWith("G") ? "G" : slot, subtitle: `слот ${letterSlots.indexOf(slot) + 1}`, icon: slot.startsWith("G") ? "G" : slot })), selectedIndex: letterSlots.indexOf(slotId), title: "ZEONGG — выбираем букву" };
+    innerRoulette = { items: letterSlots.map((slot, i) => ({ key: slot, title: slot.startsWith("G") ? "G" : slot, subtitle: `слот ${i + 1}`, icon: slot.startsWith("G") ? "G" : slot })), selectedIndex: letterSlots.indexOf(slotId), title: "ZEONGG — выбираем букву" };
     label = completed ? `ZEONGG собрано! +${completionReward} Z-Coin` : `Буква «${letter}» получена`;
     rewardValue = completionReward;
     metadata = { bonusType: reward.type, letter, slotId, word: "ZEONGG", zeonggUnlocked: completed, completionReward };
@@ -83,13 +83,12 @@ export async function POST(request: Request) {
       await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Награда за сбор слова ZEONGG: ${completionReward} Z-Coin`, amount: completionReward, status: "SUCCESS", idempotencyKey: `zeongg-reward:${idempotencyKey}` } });
       await tx.notification.create({ data: { userId: user.id, type: "ZCOIN_GRANT", title: "ZEONGG собрано!", body: `Вам начислено ${completionReward} Z-Coin.` } });
     });
-  } else if (reward.type === "DEPOSIT_RANDOM_SKIN") {
-    const drops = await prisma.drop.findMany({ where: { environment: "SYSTEM", case: { isActive: true } }, select: { id: true, name: true, rarity: true, image: true, price: true } });
-    if (!drops.length) return NextResponse.json({ error: "Сейчас нет доступных скинов." }, { status: 409 });
-    const selected = weightedPick(drops.map((item) => ({ item, weight: Math.max(1, 1000 / Math.max(1, item.price)) })));
-    const items = drops.slice(0, 40).map((item) => ({ key: item.id, title: item.name, subtitle: `${item.price} Z-Coin`, image: item.image }));
-    innerRoulette = { items, selectedIndex: Math.max(0, items.findIndex((x) => x.key === selected.id)), title: "Скин за пополнение" };
-    metadata = { bonusType: reward.type, skin: selected, onTopUp: true }; label = `Случайный скин за пополнение: ${selected.name}`;
+  } else if (reward.type === "DEPOSIT_BONUS") {
+    const selected = weightedPick(depositRewards.map((item) => ({ item, weight: item.weight })));
+    innerRoulette = { items: depositRewards.map((item) => ({ key: String(item.amount), title: `+${item.amount}%`, subtitle: "к пополнению", icon: "%" })), selectedIndex: depositRewards.findIndex((item) => item.amount === selected.amount), title: "Бонус на депозит" };
+    rewardValue = selected.amount;
+    label = `Депозитный бонус: +${selected.amount}%`;
+    metadata = { bonusType: reward.type, percent: selected.amount, onDeposit: true, chanceWeight: selected.weight };
   } else if (reward.type === "FREE_CASE") {
     if (!cases.length) return NextResponse.json({ error: "Сейчас нет доступных кейсов." }, { status: 409 });
     const selected = weightedPick(cases.map((item) => ({ item, weight: 1 / Math.max(1, item.price) })));
@@ -102,7 +101,6 @@ export async function POST(request: Request) {
     innerRoulette = { items: pool.map((amount) => ({ key: String(amount), title: `+${amount} Z-Coin`, icon: "Z¢" })), selectedIndex: pool.indexOf(selected), title: "Z-Coin Rain" };
     label = `Z-Coin Rain: +${selected} Z-Coin`; metadata = { bonusType: reward.type, amount: selected };
   } else if (reward.type === "Z_BOOST") {
-    innerRoulette = { items: [5, 10, 15, 20, 25, 30, 35].map((p) => ({ key: String(p), title: `+${p}%`, subtitle: "к следующей награде", icon: "%" })), selectedIndex: 4, title: "Бонус к следующей награде" };
     metadata = { bonusType: reward.type, percent: 25, nextRewardOnly: true };
   } else if (reward.type === "LUCKY_DROP") metadata = { bonusType: reward.type, effect: "next_drop_rarity_boost", nextCaseOnly: true };
   else if (reward.type === "SAFE_OPEN") metadata = { bonusType: reward.type, effect: "protect_from_lowest_drop", nextCaseOnly: true };
@@ -110,6 +108,6 @@ export async function POST(request: Request) {
 
   const result = { rewardType: reward.type, rewardValue, caseId, label, sectorIndex, metadata, innerRoulette };
   await prisma.operation.create({ data: { userId: user.id, type: "FORTUNE_SPIN", label: json(result), amount: rewardValue ?? 0, status: "SUCCESS", idempotencyKey } });
-  await prisma.operation.create({ data: { userId: user.id, type: reward.type === "DEPOSIT_RANDOM_SKIN" ? "FORTUNE_DEPOSIT" : "FORTUNE_BONUS", label: json({ ...metadata, displayLabel: label }), amount: rewardValue ?? 0, status: "UNUSED", idempotencyKey: `fortune-bonus-${idempotencyKey}` } });
+  await prisma.operation.create({ data: { userId: user.id, type: reward.type === "DEPOSIT_BONUS" ? "FORTUNE_DEPOSIT" : "FORTUNE_BONUS", label: json({ ...metadata, displayLabel: label }), amount: rewardValue ?? 0, status: "UNUSED", idempotencyKey: `fortune-bonus-${idempotencyKey}` } });
   return NextResponse.json({ ok: true, ...result, letterState: await getLetterState(user.id), word: "ZEONGG", letterSlots });
 }
