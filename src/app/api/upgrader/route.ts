@@ -48,7 +48,9 @@ export async function GET() {
     prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
   ]);
 
-  return NextResponse.json({ inventory: uniqueItems(inventory).map(publicItem), targets: uniqueItems(drops).map(publicItem), balance: balance?.balance ?? 0 });
+  // Inventory items are individual instances. Never collapse equal skins here:
+  // two identical Karambit Claws must be shown as two separate selectable items.
+  return NextResponse.json({ inventory: inventory.map(publicItem), targets: uniqueItems(drops).map(publicItem), balance: balance?.balance ?? 0 });
 }
 
 export async function POST(request: Request) {
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
     const result = await prisma.$transaction(async (tx) => {
       const [item, target, freshUser] = await Promise.all([
         itemId ? tx.inventoryItem.findFirst({ where: { id: itemId, userId: user.id, soldAt: null }, select: { id: true, name: true, rarity: true, image: true, price: true } }) : Promise.resolve(null),
-        tx.drop.findFirst({ where: { id: targetId, case: { environment: "SYSTEM", isActive: true } }, select: { id: true, name: true, rarity: true, image: true, price: true } }),
+        tx.drop.findFirst({ where: { id: targetId, case: { environment: "SYSTEM", isActive: true } }, select: { id: true, caseId: true, name: true, rarity: true, image: true, price: true } }),
         tx.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
       ]);
       if (itemId && !item) throw new Error("ITEMS_NOT_AVAILABLE");
@@ -111,7 +113,9 @@ export async function POST(request: Request) {
         return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: recoveryOperation.id, image: "/cases/CaseRecovery.png", lostValue: totalInputValue } };
       }
 
-      const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
+      // Every successful upgrade creates a brand-new inventory instance.
+      // It must never merge/stack with an existing copy of the same skin.
+      const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, caseId: target.caseId, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
       await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_REWARD", itemId: resultItem.id, label: `Получен ${target.name}`, amount: target.price, status: "SUCCESS", idempotencyKey: `${idempotencyKey}:reward` } });
       return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem), inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: null };
     });
