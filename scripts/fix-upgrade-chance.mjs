@@ -13,17 +13,13 @@ if (!fixed.includes("const MIN_CHANCE = 0.01;")) {
   fixed = fixed.replace(/const chanceFor = \([^\n]+\) => [^;]+;/, "const MIN_CHANCE = 0.01;\nconst chanceFor = (input: number, target: number) => Math.min(100, target > 0 ? (input / target) * 100 : 0);");
 }
 
-// HARD RULE: the orange upgrade-success bar must represent the exact calculated
-// chance. Never use a fixed 25% visual width or cap the bar at 25%.
-// The same `shownChance` value shown to the user is the source of truth.
+// HARD RULE: the orange success bar must use the exact calculated chance.
 const orangeTagPattern = /<([A-Za-z][A-Za-z0-9]*)\b(?=[^>]*className=(?:\"|')(?=[^\"']*(?:orange|amber))[^\"']*(?:\"|'))(?=[^>]*style=\{\{)[^>]*>/g;
 fixed = fixed.replace(orangeTagPattern, (tag) => {
   if (!/width\s*:/.test(tag)) return tag;
   return tag.replace(/width\s*:\s*[^,}]+/g, "width: `${Math.max(0, Math.min(100, shownChance))}%`");
 });
 
-// Cover bars whose color is supplied as a Tailwind arbitrary value instead of
-// an `orange` class, while only touching tags that also expose an inline width.
 const orangeStyleTagPattern = /<([A-Za-z][A-Za-z0-9]*)\b(?=[^>]*style=\{\{)[^>]*>/g;
 fixed = fixed.replace(orangeStyleTagPattern, (tag) => {
   if (!/width\s*:/.test(tag)) return tag;
@@ -33,9 +29,16 @@ fixed = fixed.replace(orangeStyleTagPattern, (tag) => {
 
 if (fixed !== source) {
   fs.writeFileSync(path, fixed);
-  console.log("Upgrade chance guard applied: exact calculated chance now drives the orange bar.");
+  console.log("Upgrade chance guard applied.");
 } else {
   const valid = source.includes("const MIN_CHANCE = 0.01;") && source.includes("target > 0 ? (input / target) * 100 : 0");
   if (!valid) throw new Error("Upgrade chance guard: expected chance formula was not found");
-  console.log("Upgrade chance already precise; no changes needed.");
 }
+
+// Temporary diagnostic for the CI run: capture every width expression and the
+// nearby chance/bar markup so the exact visual source can be fixed safely.
+const hits = [];
+for (const match of fixed.matchAll(/.{0,500}(?:shownChance|chanceFor|width\s*:|orange|amber).{0,700}/g)) {
+  hits.push(match[0]);
+}
+fs.writeFileSync("upgrade-bar-diagnostic.txt", hits.slice(0, 80).join("\n--- HIT ---\n"));
