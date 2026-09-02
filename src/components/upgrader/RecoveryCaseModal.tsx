@@ -29,6 +29,11 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
   const [reelShift, setReelShift] = useState<number | null>(null);
   const [error, setError] = useState("");
   const reelViewportRef = useRef<HTMLDivElement | null>(null);
+  // State updates are asynchronous. A fast double-tap can otherwise enter
+  // openCase twice before `opening` becomes true, producing two different
+  // idempotency keys; the first request consumes the case and the second gets
+  // RECOVERY_CASE_NOT_FOUND. The ref locks the action immediately.
+  const openingRef = useRef(false);
 
   useEffect(() => {
     for (const src of [CASE_IMAGE, OPEN_CASE_IMAGE]) preloadImage(src);
@@ -48,7 +53,8 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
   }, [stage, targetIndex, reelItems.length]);
 
   async function openCase() {
-    if (opening || stage !== "closed") return;
+    if (openingRef.current || opening || stage !== "closed") return;
+    openingRef.current = true;
     setOpening(true);
     setError("");
     setReelShift(null);
@@ -81,6 +87,7 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
       setStage("closed");
       setError(e instanceof Error ? e.message : "Ошибка открытия кейса");
     } finally {
+      openingRef.current = false;
       setOpening(false);
     }
   }
