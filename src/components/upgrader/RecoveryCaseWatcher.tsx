@@ -6,10 +6,15 @@ import RecoveryCaseModal from "./RecoveryCaseModal";
 
 type Recovery = { id: string; lostValue: number; image?: string };
 
-// The recovery operation is created when the failed upgrade is resolved on the server,
-// before the client finishes the roulette + dissolve animation. Keep the modal behind
-// that whole animation window so it can never cover the spinning wheel.
-const RECOVERY_REVEAL_DELAY_MS = 6800;
+// HARD RULE for the Otygrysh (Recovery) case:
+// 1. The server may create the recovery operation immediately after a failed upgrade.
+// 2. That does NOT mean the case may be shown immediately.
+// 3. The failed-upgrade roulette + stop + card dissolve/disassembly MUST finish first.
+// 4. Only after this safety window may the Otygrysh case appear.
+//
+// Keep this deliberately longer than the normal animation sequence. This is a guardrail,
+// not an estimate: if the animation finishes earlier, the case still waits for this point.
+const RECOVERY_REVEAL_DELAY_MS = 10_000;
 
 export default function RecoveryCaseWatcher() {
   const pathname = usePathname();
