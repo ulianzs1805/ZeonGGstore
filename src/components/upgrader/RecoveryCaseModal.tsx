@@ -29,10 +29,6 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
   const [reelShift, setReelShift] = useState<number | null>(null);
   const [error, setError] = useState("");
   const reelViewportRef = useRef<HTMLDivElement | null>(null);
-  // State updates are asynchronous. A fast double-tap can otherwise enter
-  // openCase twice before `opening` becomes true, producing two different
-  // idempotency keys; the first request consumes the case and the second gets
-  // RECOVERY_CASE_NOT_FOUND. The ref locks the action immediately.
   const openingRef = useRef(false);
 
   useEffect(() => {
@@ -65,6 +61,14 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
         body: JSON.stringify({ recoveryCaseId: caseId, idempotencyKey: crypto.randomUUID() }),
       });
       const data = await response.json();
+
+      // A case can be consumed by a previous request/session. This is not a
+      // user-facing error: the watcher will pick up any remaining OPEN case.
+      if (response.status === 404 && data?.error === "RECOVERY_CASE_NOT_FOUND") {
+        setError("");
+        onClose();
+        return;
+      }
       if (!response.ok) throw new Error(data.error || "Не удалось открыть кейс");
 
       const nextReward = data.resultItem ?? data.reward ?? null;
@@ -119,15 +123,10 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
           <div ref={reelViewportRef} className="relative mx-auto mt-8 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#090c17] py-5">
             <div className="pointer-events-none absolute inset-y-0 left-1/2 z-20 w-[3px] -translate-x-1/2 bg-white shadow-[0_0_18px_rgba(255,255,255,.9)]" />
             <div className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 border-x-[10px] border-x-transparent border-t-[14px] border-t-white" />
-            <div
-              className={`recovery-reel-track flex w-max gap-3 px-3 ${reelShift !== null ? "recovery-reel-ready" : ""}`}
-              style={reelShift !== null ? ({ "--reel-shift": `${reelShift}px` } as CSSProperties) : undefined}
-            >
+            <div className={`recovery-reel-track flex w-max gap-3 px-3 ${reelShift !== null ? "recovery-reel-ready" : ""}`} style={reelShift !== null ? ({ "--reel-shift": `${reelShift}px` } as CSSProperties) : undefined}>
               {reelItems.map((item, index) => (
                 <div key={item.id} className={`flex h-36 w-36 shrink-0 flex-col items-center justify-center rounded-2xl border border-violet-400/15 bg-[#12172a] p-3 ${index === targetIndex ? "ring-2 ring-violet-400/40" : ""}`}>
-                  <div className="relative h-24 w-full">
-                    <img src={item.image} alt={item.name} width={96} height={96} className="h-24 w-full object-contain" loading="eager" decoding="sync" draggable={false} />
-                  </div>
+                  <div className="relative h-24 w-full"><img src={item.image} alt={item.name} width={96} height={96} className="h-24 w-full object-contain" loading="eager" decoding="sync" draggable={false} /></div>
                   <span className="mt-1 max-w-full truncate text-[10px] font-bold text-zinc-400">{item.name}</span>
                 </div>
               ))}
