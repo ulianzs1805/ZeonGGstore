@@ -7,7 +7,7 @@ import RecentDropsStrip from "@/app/components/RecentDropsStrip";
 type CaseItem = { id: string; name: string; image: string; price: number };
 type WheelItem = { type: string; label: string; icon: string; weight: number };
 type LetterState = { collected: string[]; completed: boolean };
-type Result = { rewardType: string; rewardValue: number | null; caseId: string | null; label: string; mode?: string; metadata?: Record<string, unknown>; letterState?: LetterState; sectorIndex?: number };
+type Result = { rewardType: string; rewardValue: number | null; caseId: string | null; label: string; mode?: string; metadata?: { letter?: string; slotId?: string; zeonggUnlocked?: boolean; [key: string]: any }; letterState?: LetterState; sectorIndex?: number };
 type Mode = "BONUS" | "CASE" | "DEPOSIT";
 type DepositReward = { amount: number; label: string; weight: number };
 
