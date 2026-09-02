@@ -7,7 +7,7 @@ import { resolveSkinImage } from "@/lib/skin-image";
 const CASE_IMAGE = "/cases/recovery-body.svg";
 const RECOVERY_MIN_MULTIPLIER = 0.75;
 const RECOVERY_MAX_MULTIPLIER = 1.15;
-const REEL_SIZE = 15;
+const REEL_SIZE = 31;
 const publicItem = (item: { id: string; name: string; rarity: string; image: string; price: number }) => ({ id: item.id, name: item.name, rarity: item.rarity, image: resolveSkinImage(item.name, item.image), price: Number(item.price) || 0 });
 
 function shuffle<T>(items: T[]) {
@@ -59,12 +59,9 @@ export async function POST(request: Request) {
 
       const shuffled = shuffle(drops);
       const target = shuffled[0];
-      const reelPool = shuffle(drops).slice(0, Math.min(REEL_SIZE, drops.length));
-      if (!reelPool.some((item) => item.id === target.id)) {
-        reelPool[reelPool.length - 1] = target;
-      }
-      const targetIndex = Math.min(reelPool.length - 1, 10);
-      [reelPool[targetIndex], reelPool[reelPool.length - 1]] = [reelPool[reelPool.length - 1], reelPool[targetIndex]];
+      const reelPool = Array.from({ length: REEL_SIZE }, (_, index) => shuffled[index % shuffled.length]);
+      const targetIndex = 24;
+      reelPool[targetIndex] = target;
       const reelItems = reelPool.map((item, index) => ({ ...publicItem(item), id: `${item.id}-${index}` }));
 
       const item = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
