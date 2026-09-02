@@ -11,6 +11,15 @@ type InnerRouletteData = { items: InnerItem[]; selectedIndex: number; title: str
 type Result = { rewardType: string; rewardValue: number | null; caseId: string | null; label: string; sectorIndex: number; metadata?: { letter?: string; slotId?: string; [key: string]: unknown }; innerRoulette?: InnerRouletteData | null; letterState?: LetterState };
 
 const LETTER_IMAGE = "/bonuses/Bonuses%20Z%20E%20O%20N%20G%20G%20.PNG";
+const letterImages = [
+  "/bonuses/letter_Z.png",
+  "/bonuses/letter_E.png",
+  "/bonuses/letter_O.png",
+  "/bonuses/letter_N.png",
+  "/bonuses/letter_G1.png",
+  "/bonuses/letter_G2.png",
+];
+
 const fallbackWheel: WheelItem[] = [
   { type: "ZEON_SECRET", label: "ZEONGG Secret", icon: "Z", weight: 10 },
   { type: "DEPOSIT_BONUS", label: "Депозит +5–35%", icon: "%", weight: 12 },
@@ -59,6 +68,23 @@ function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: 
   </div>;
 }
 
+function RevolverChamber({ item, index, angle, selected }: { item: WheelItem; index: number; angle: number; selected: boolean }) {
+  const mid = index * angle + angle / 2;
+  const isLetters = item.type === "ZEON_SECRET";
+  return <div className="absolute left-1/2 top-1/2 h-[24%] w-[24%] -translate-x-1/2 -translate-y-1/2" style={{ transform: `rotate(${mid}deg) translateY(-145%)` }}>
+    <div className={`relative h-full w-full rounded-full border-[5px] bg-[#07090e] shadow-[inset_0_0_28px_rgba(0,0,0,.95),0_10px_35px_rgba(0,0,0,.55)] transition-all duration-300 sm:border-[7px] ${selected ? "border-orange-200 shadow-[0_0_35px_rgba(251,146,60,.8),inset_0_0_30px_rgba(251,146,60,.16)]" : "border-[#242832]"}`}>
+      <div className="absolute inset-[10%] rounded-full border border-white/10 bg-[#0b0e15]" />
+      {isLetters && <div className="absolute inset-[18%] flex items-center justify-center gap-0.5 rounded-full bg-black/30 p-1">
+        {letterImages.map((src, letterIndex) => <img key={src} src={src} alt={`ZEONGG ${letterIndex + 1}`} className="h-1/2 w-1/6 object-contain opacity-90" />)}
+      </div>}
+      {selected && <div className="absolute inset-[8%] rounded-full border border-orange-300/40 animate-pulse" />}
+    </div>
+    <div className="pointer-events-none absolute left-1/2 top-[108%] w-[150%] -translate-x-1/2 text-center" style={{ transform: `translateX(-50%) rotate(${-mid}deg)` }}>
+      <span className={`text-[7px] font-black uppercase leading-3 drop-shadow-[0_2px_6px_rgba(0,0,0,.95)] sm:text-[9px] ${selected ? "text-orange-100" : "text-slate-300"}`}>{item.label}</span>
+    </div>
+  </div>;
+}
+
 export default function FortuneWheelPage() {
   const [wheel, setWheel] = useState(fallbackWheel);
   const [letterState, setLetterState] = useState<LetterState>({ collected: [], completed: false });
@@ -75,8 +101,7 @@ export default function FortuneWheelPage() {
   }, []);
 
   const angle = 360 / Math.max(wheel.length, 1);
-  const colors = ["#3b1767", "#17365a", "#681945", "#14505a", "#65401d", "#35165f", "#155247", "#5b1b42"];
-  const background = useMemo(() => `conic-gradient(from 0deg, ${wheel.map((_, i) => `${colors[i % colors.length]} ${i * angle}deg ${(i + 1) * angle}deg`).join(",")})`, [wheel, angle]);
+  const background = useMemo(() => `conic-gradient(from 0deg, ${wheel.map((_, i) => `${["#171a22","#151821","#191c25","#151821"][i % 4]} ${i * angle}deg ${(i + 1) * angle}deg`).join(",")})`, [wheel, angle]);
 
   async function spin() {
     if (spinning || innerSpinning || !wheel.length) return;
@@ -107,7 +132,7 @@ export default function FortuneWheelPage() {
         <div className="border-b border-white/10 bg-[radial-gradient(circle_at_50%_-25%,rgba(124,58,237,.3),transparent_58%)] px-4 py-8 text-center sm:px-8 sm:py-10">
           <div className="inline-flex items-center gap-2 rounded-full border border-orange-300/20 bg-orange-400/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-[.24em] text-orange-200"><span className="h-1.5 w-1.5 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(251,146,60,.95)]" /> ZEONGG • Барабан</div>
           <h1 className="mt-3 text-3xl font-black uppercase tracking-[-.05em] sm:text-5xl">Барабан бонусов</h1>
-          <p className="mx-auto mt-3 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">Один режим. Внешний барабан выбирает бонус, а случайная награда разыгрывается второй рулеткой прямо в центре.</p>
+          <p className="mx-auto mt-3 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">Восемь круглых камер как у барабана револьвера. Сервер выбирает одну камеру, затем при необходимости запускается внутренняя рулетка.</p>
         </div>
 
         <div className="grid gap-6 p-3 sm:p-6 lg:grid-cols-[minmax(0,1fr)_330px] lg:p-8">
@@ -116,16 +141,13 @@ export default function FortuneWheelPage() {
             <div className="relative mx-auto aspect-square w-full max-w-[720px]">
               <div className="absolute inset-0 rounded-full bg-violet-600/10 blur-3xl" />
               <div className="absolute inset-[2%] rounded-full border border-white/5 bg-[#06080c] shadow-[0_0_100px_rgba(0,0,0,.9)]" />
-              <div className="absolute inset-[4%] rounded-full border-[10px] border-[#151821] shadow-[0_0_0_2px_rgba(255,255,255,.04),0_25px_70px_rgba(0,0,0,.9),inset_0_0_45px_rgba(0,0,0,.9)] sm:border-[14px]" />
-              <div className="absolute inset-[7%] rounded-full border border-white/10 bg-[#0a0d13] p-1 shadow-[inset_0_0_45px_rgba(0,0,0,.9)]">
+              <div className="absolute inset-[5%] rounded-full border-[14px] border-[#151821] shadow-[0_0_0_2px_rgba(255,255,255,.04),0_25px_70px_rgba(0,0,0,.9),inset_0_0_45px_rgba(0,0,0,.9)] sm:border-[20px]" />
+              <div className="absolute inset-[8%] rounded-full border border-white/10 bg-[#090c12] p-2 shadow-[inset_0_0_55px_rgba(0,0,0,.95)]">
                 <div className="relative h-full w-full overflow-hidden rounded-full" style={{ transform: `rotate(${rotation}deg)`, transition: "transform 5s cubic-bezier(.08,.72,.12,1)", background }}>
-                  <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,transparent_0,transparent_48%,rgba(0,0,0,.28)_100%)]" />
-                  {wheel.map((item, i) => { const mid = i * angle + angle / 2; const winner = selected === i; return <div key={item.type} className="absolute left-1/2 top-1/2 flex h-[46%] w-[28%] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center" style={{ transform: `rotate(${mid}deg) translateY(-73%)` }}>
-                    <div className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border text-[9px] font-black shadow-[0_8px_25px_rgba(0,0,0,.45)] transition-all duration-300 sm:h-14 sm:w-14 sm:text-xs ${winner ? "scale-110 border-orange-100 bg-orange-400/30 text-white shadow-[0_0_35px_rgba(251,146,60,.75)]" : "border-white/15 bg-black/30 text-orange-100"}`}><span className="absolute inset-0 rounded-2xl bg-white/5" /><span className="relative">{item.icon}</span></div>
-                    <span className={`mt-2 max-w-[110px] text-[7px] font-black uppercase leading-3 drop-shadow-[0_2px_5px_rgba(0,0,0,.95)] sm:text-[9px] ${winner ? "text-white" : "text-slate-100"}`}>{item.label}</span>
-                  </div>; })}
-                  {wheel.map((_, i) => <div key={`separator-${i}`} className="pointer-events-none absolute left-1/2 top-1/2 h-1/2 w-px origin-top bg-white/10" style={{ transform: `rotate(${i * angle}deg)` }} />)}
-                  <div className="absolute inset-[30%] rounded-full border border-white/10 bg-[#07090e]/95 shadow-[inset_0_0_45px_rgba(0,0,0,.95),0_0_35px_rgba(0,0,0,.5)]" />
+                  <div className="absolute inset-[7%] rounded-full border border-white/5 bg-[radial-gradient(circle,rgba(255,255,255,.025),transparent_55%)]" />
+                  {wheel.map((item, i) => <RevolverChamber key={item.type} item={item} index={i} angle={angle} selected={selected === i} />)}
+                  <div className="absolute inset-[29%] rounded-full border-[10px] border-[#151821] bg-[#07090e] shadow-[inset_0_0_45px_rgba(0,0,0,.95),0_0_0_2px_rgba(255,255,255,.04)] sm:border-[14px]" />
+                  <div className="absolute inset-[34%] rounded-full border border-white/10 bg-[#0b0e14] shadow-[inset_0_0_35px_rgba(0,0,0,.95)]" />
                 </div>
               </div>
               <div className="absolute left-1/2 top-[1.5%] z-[70] -translate-x-1/2"><div className="h-0 w-0 border-l-[20px] border-r-[20px] border-t-[34px] border-l-transparent border-r-transparent border-t-orange-300 drop-shadow-[0_0_18px_rgba(251,146,60,.75)]" /></div>
@@ -135,7 +157,7 @@ export default function FortuneWheelPage() {
               {result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}
             </div>
             {error && <div className="mt-4 rounded-2xl border border-red-300/10 bg-red-400/5 px-4 py-3 text-center text-xs text-red-300">{error}</div>}
-            {result && !innerSpinning && <div className="mt-5 rounded-2xl border border-orange-300/15 bg-orange-400/5 px-4 py-4 text-center"><div className="text-[8px] font-black uppercase tracking-[.25em] text-orange-300">Результат</div><div className="mt-1 text-lg font-black">{result.label}</div>{result.rewardValue !== null && <div className="mt-1 text-sm font-bold text-orange-200">{result.rewardValue}</div>}</div>}
+            {result && !innerSpinning && <div className="mt-5 rounded-2xl border border-orange-300/15 bg-orange-400/5 px-4 py-4 text-center"><div className="text-[8px] font-black uppercase tracking-[.25em] text-orange-300">Вам выпал бонус</div><div className="mt-1 text-lg font-black">{result.label}</div>{result.rewardValue !== null && <div className="mt-1 text-sm font-bold text-orange-200">{result.rewardValue}</div>}</div>}
           </div>
 
           <aside className="space-y-4">
