@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import AppChrome from "./components/layout/AppChrome";
 import RecoveryCaseWatcher from "@/components/upgrader/RecoveryCaseWatcher";
+import UpgradeRecoveryInfo from "@/components/upgrader/UpgradeRecoveryInfo";
 
 const LOGO_PATH = "/AFED0327-AB02-4E23-9FCC-B94940A08A4C.png";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
           <AppChrome>
             {children}
             <RecoveryCaseWatcher />
+            <UpgradeRecoveryInfo />
           </AppChrome>
         </Providers>
       </body>
