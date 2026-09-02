@@ -34,6 +34,7 @@ export async function POST(request: Request) {
   if (existing?.type === "FORTUNE_SPIN") return NextResponse.json({ ok: true, ...JSON.parse(existing.label || "{}"), replay: true });
 
   const reward = weightedPick(wheel.map((item) => ({ item, weight: item.weight })));
+  const sectorIndex = wheel.findIndex((item) => item === reward);
   const cases = await prisma.case.findMany({ where: { isActive: true, environment: "SYSTEM" }, select: { id: true, slug: true, name: true, image: true, price: true }, orderBy: { price: "asc" } });
   if (reward.type === "CASE" && !cases.length) return NextResponse.json({ error: "Сейчас нет доступных кейсов." }, { status: 409 });
 
@@ -42,10 +43,10 @@ export async function POST(request: Request) {
     rewardValue = weightedPick(depositValues.map((value) => ({ item: value, weight: 36 - value })));
     const oldBonus = await prisma.operation.findFirst({ where: { userId: user.id, type: "FORTUNE_DEPOSIT", status: "UNUSED" }, orderBy: { amount: "desc" } });
     if (oldBonus && oldBonus.amount >= rewardValue) {
-      const old = JSON.parse(oldBonus.label || "{}");
       label = `Депозит +${oldBonus.amount}%`;
-      await prisma.operation.create({ data: { userId: user.id, type: "FORTUNE_SPIN", label: JSON.stringify({ rewardType: reward.type, rewardValue: oldBonus.amount, label }), amount: oldBonus.amount, status: "SUCCESS", idempotencyKey } });
-      return NextResponse.json({ ok: true, rewardType: reward.type, rewardValue: oldBonus.amount, label, keptBest: true });
+      const result = { rewardType: reward.type, rewardValue: oldBonus.amount, label, sectorIndex };
+      await prisma.operation.create({ data: { userId: user.id, type: "FORTUNE_SPIN", label: JSON.stringify(result), amount: oldBonus.amount, status: "SUCCESS", idempotencyKey } });
+      return NextResponse.json({ ok: true, ...result, keptBest: true });
     }
     code = `DEP${rewardValue}-${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
     await prisma.operation.create({ data: { userId: user.id, type: "FORTUNE_DEPOSIT", label: JSON.stringify({ code, percent: rewardValue }), amount: rewardValue, status: "UNUSED", idempotencyKey: `fortune-deposit-${idempotencyKey}` } });
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     await prisma.transaction.create({ data: { userId: user.id, type: "FORTUNE_ZCOIN", zCoinAmount: rewardValue, status: "SUCCESS" } });
     label = `+${rewardValue} Z-Coin`;
   }
-  const result = { rewardType: reward.type, rewardValue, caseId, label, code };
+  const result = { rewardType: reward.type, rewardValue, caseId, label, code, sectorIndex };
   await prisma.operation.create({ data: { userId: user.id, type: "FORTUNE_SPIN", label: JSON.stringify(result), amount: rewardValue ?? 0, status: "SUCCESS", idempotencyKey } });
   return NextResponse.json({ ok: true, ...result });
 }
