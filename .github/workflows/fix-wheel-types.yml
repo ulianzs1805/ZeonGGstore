@@ -1,0 +1,33 @@
+name: Fix wheel metadata type
+
+on:
+  push:
+    branches: [terminal]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix TypeScript metadata type
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/bonuses/wheel/page.tsx')
+          s = p.read_text()
+          old = 'metadata?: Record<string, unknown>;'
+          new = 'metadata?: { letter?: string; slotId?: string; zeonggUnlocked?: boolean; [key: string]: any };'
+          if old not in s:
+              raise SystemExit('target type not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/bonuses/wheel/page.tsx
+          git commit -m 'fix: type wheel metadata for React rendering' || exit 0
+          git push
