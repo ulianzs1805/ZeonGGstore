@@ -62,8 +62,6 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
       });
       const data = await response.json();
 
-      // A case can be consumed by a previous request/session. This is not a
-      // user-facing error: the watcher will pick up any remaining OPEN case.
       if (response.status === 404 && data?.error === "RECOVERY_CASE_NOT_FOUND") {
         setError("");
         onClose();
@@ -102,12 +100,11 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
         <style>{`
           @keyframes recoveryShake {0%,100%{transform:translateX(0) rotate(0)}20%{transform:translateX(-5px) rotate(-1deg)}40%{transform:translateX(6px) rotate(1deg)}60%{transform:translateX(-4px) rotate(-1deg)}80%{transform:translateX(3px)}}
           @keyframes recoveryOpen {0%{transform:scale(1)}100%{transform:scale(1.05) translateY(-4px)}}
-          @keyframes recoveryReel {0%{transform:translate3d(0,0,0)}100%{transform:translate3d(var(--reel-shift),0,0)}}
           @keyframes recoveryReward {0%{opacity:0;transform:scale(.9) translateY(16px)}100%{opacity:1;transform:scale(1) translateY(0)}}
           .recovery-opening{animation:recoveryShake .65s ease-in-out both}
           .recovery-case-opening{animation:recoveryOpen .65s ease-in-out both}
           .recovery-reel-track{transform:translate3d(0,0,0);will-change:transform}
-          .recovery-reel-track.recovery-reel-ready{animation:recoveryReel ${REEL_MS}ms cubic-bezier(.08,.78,.12,1) forwards}
+          .recovery-reel-track.recovery-reel-ready{transition:transform ${REEL_MS}ms cubic-bezier(.08,.78,.12,1)}
           .recovery-reward{animation:recoveryReward .45s ease-out both}
         `}</style>
         <p className="text-[10px] font-black tracking-[.35em] text-violet-300">ПОСЛЕ НЕУДАЧНОГО АПГРЕЙДА</p>
@@ -123,7 +120,10 @@ export default function RecoveryCaseModal({ caseId, lostValue, onClose, onReward
           <div ref={reelViewportRef} className="relative mx-auto mt-8 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#090c17] py-5">
             <div className="pointer-events-none absolute inset-y-0 left-1/2 z-20 w-[3px] -translate-x-1/2 bg-white shadow-[0_0_18px_rgba(255,255,255,.9)]" />
             <div className="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 border-x-[10px] border-x-transparent border-t-[14px] border-t-white" />
-            <div className={`recovery-reel-track flex w-max gap-3 px-3 ${reelShift !== null ? "recovery-reel-ready" : ""}`} style={reelShift !== null ? ({ "--reel-shift": `${reelShift}px` } as CSSProperties) : undefined}>
+            <div
+              className={`recovery-reel-track flex w-max gap-3 px-3 ${reelShift !== null ? "recovery-reel-ready" : ""}`}
+              style={reelShift !== null ? ({ transform: `translate3d(${reelShift}px,0,0)` } as CSSProperties) : undefined}
+            >
               {reelItems.map((item, index) => (
                 <div key={item.id} className={`flex h-36 w-36 shrink-0 flex-col items-center justify-center rounded-2xl border border-violet-400/15 bg-[#12172a] p-3 ${index === targetIndex ? "ring-2 ring-violet-400/40" : ""}`}>
                   <div className="relative h-24 w-full"><img src={item.image} alt={item.name} width={96} height={96} className="h-24 w-full object-contain" loading="eager" decoding="sync" draggable={false} /></div>
