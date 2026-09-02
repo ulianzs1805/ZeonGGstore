@@ -7,6 +7,7 @@ import { resolveSkinImage } from "@/lib/skin-image";
 
 const MIN_CHANCE = 0.01;
 const MAX_CHANCE = 100;
+const RECOVERY_CASE_CHANCE = 0.5;
 
 /**
  * One canonical upgrade formula used by the server.
@@ -48,8 +49,7 @@ export async function GET() {
     prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } }),
   ]);
 
-  // Inventory items are individual instances. Never collapse equal skins here:
-  // two identical Karambit Claws must be shown as two separate selectable items.
+  // Inventory items are individual instances. Never collapse equal skins here.
   return NextResponse.json({ inventory: inventory.map(publicItem), targets: uniqueItems(drops).map(publicItem), balance: balance?.balance ?? 0 });
 }
 
@@ -109,15 +109,21 @@ export async function POST(request: Request) {
 
       const inputItem = item ? publicItem(item) : { id: "balance", name: "Баланс Z-Coin", rarity: "BALANCE", image: "", price: balanceTopUp };
       if (!success) {
+        // A recovery case is deliberately NOT guaranteed. Exactly 50% of
+        // upgrade losses receive an open Recovery operation; the other 50%
+        // are simply a loss with no Recovery case.
+        const recoveryGranted = randomInt(0, 2) === 0;
+        if (!recoveryGranted) {
+          return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: null, recoveryGranted: false };
+        }
+
         const recoveryOperation = await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_CASE", amount: 0, status: "OPEN", label: JSON.stringify({ lostItemName: inputItem.name, lostItemImage: inputItem.image, lostItemRarity: inputItem.rarity, lostValue: totalInputValue }), idempotencyKey: `${idempotencyKey}:recovery` } });
-        return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: recoveryOperation.id, image: "/cases/CaseRecovery.png", lostValue: totalInputValue } };
+        return { success, chance, roll, target: publicItem(target), resultItem: null, inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: { id: recoveryOperation.id, image: "/cases/CaseRecovery.png", lostValue: totalInputValue }, recoveryGranted: true };
       }
 
-      // Every successful upgrade creates a brand-new inventory instance.
-      // It must never merge/stack with an existing copy of the same skin.
       const resultItem = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, caseId: target.caseId, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
       await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_REWARD", itemId: resultItem.id, label: `Получен ${target.name}`, amount: target.price, status: "SUCCESS", idempotencyKey: `${idempotencyKey}:reward` } });
-      return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem), inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: null };
+      return { success, chance, roll, target: publicItem(target), resultItem: publicItem(resultItem), inputItem, inputValue, balanceTopUp, totalInputValue, recoveryCase: null, recoveryGranted: false };
     });
     return NextResponse.json(result);
   } catch (error: unknown) {
