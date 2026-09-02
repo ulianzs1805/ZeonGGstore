@@ -7,6 +7,10 @@ import { resolveSkinImage } from "@/lib/skin-image";
 const CASE_IMAGE = "/cases/recovery-body.svg";
 const RECOVERY_CASE_CHANCE = 0.5;
 const REEL_SIZE = 31;
+// A failed-upgrade recovery can still lose value, but never more than 75% of
+// the lost amount. Example: a 2,000 Z loss can recover only from 500 Z upward.
+// This is enforced on the server before the reward is created.
+const RECOVERY_MIN_RATIO = 0.25;
 const publicItem = (item: { id: string; name: string; rarity: string; image: string; price: number }) => ({ id: item.id, name: item.name, rarity: item.rarity, image: resolveSkinImage(item.name, item.image), price: Number(item.price) || 0 });
 
 type RecoveryDrop = { id: string; caseId: string; name: string; rarity: string; image: string; price: number };
@@ -22,14 +26,11 @@ function shuffle<T>(items: T[]) {
   return copy;
 }
 
-// Recovery is intentionally weighted rather than uniform. Items near the
-// lost value are common, slightly cheaper items are a little more common,
-// and expensive upside is possible but becomes very rare as the multiplier
-// grows. This keeps a 5,600 Z item possible after a ~2,400 Z loss without
-// making it a normal outcome.
 function recoveryWeight(price: number, lostValue: number) {
   if (!Number.isFinite(price) || !Number.isFinite(lostValue) || price <= 0 || lostValue <= 0) return 0;
   const ratio = price / lostValue;
+  // Never weight an item below the recovery floor.
+  if (ratio < RECOVERY_MIN_RATIO) return 0;
   if (ratio <= 1) {
     return 0.2 + 1.35 * Math.exp(-Math.pow((1 - ratio) / 0.42, 2));
   }
@@ -37,8 +38,11 @@ function recoveryWeight(price: number, lostValue: number) {
 }
 
 function weightedPick(items: RecoveryDrop[], lostValue: number) {
-  const weighted = items.map((item) => ({ item, weight: recoveryWeight(Number(item.price), lostValue) })).filter((entry) => entry.weight > 0);
-  if (!weighted.length) return items[randomInt(items.length)];
+  const minRecoveryValue = lostValue * RECOVERY_MIN_RATIO;
+  const eligible = items.filter((item) => Number(item.price) >= minRecoveryValue && Number(item.price) > 0);
+  if (!eligible.length) return null;
+  const weighted = eligible.map((item) => ({ item, weight: recoveryWeight(Number(item.price), lostValue) })).filter((entry) => entry.weight > 0);
+  if (!weighted.length) return eligible[randomInt(eligible.length)];
   const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
   let roll = (randomInt(1_000_000) / 1_000_000) * total;
   for (const entry of weighted) {
@@ -80,9 +84,6 @@ export async function POST(request: Request) {
       const op = await tx.operation.findFirst({ where: { id: recoveryCaseId, userId: user.id, type: "UPGRADE_RECOVERY_CASE" }, include: { item: true } });
       if (!op) throw new Error("RECOVERY_CASE_NOT_FOUND");
 
-      // If another request already consumed this case, return the already
-      // created inventory item instead of surfacing RECOVERY_CASE_NOT_FOUND.
-      // This makes retries/double taps harmless and never creates a duplicate.
       if (op.status === "CONSUMED" && op.item) {
         const meta = await parseMeta(op.label);
         return { recoveryCaseId: op.id, resultItem: publicItem(op.item), reelItems: [publicItem(op.item)], reelTargetIndex: 0, lostValue: Number(meta.lostValue) || 0, alreadyConsumed: true };
@@ -92,15 +93,18 @@ export async function POST(request: Request) {
       const meta = await parseMeta(op.label);
       const lostValue = Number(meta.lostValue) || 0;
       if (lostValue <= 0) throw new Error("RECOVERY_VALUE_INVALID");
+      const minRecoveryValue = lostValue * RECOVERY_MIN_RATIO;
 
       const drops = await tx.drop.findMany({
-        where: { case: { isActive: true }, price: { gt: 0 } },
+        where: { case: { isActive: true }, price: { gte: minRecoveryValue } },
         orderBy: [{ price: "asc" }, { name: "asc" }],
         select: { id: true, caseId: true, name: true, rarity: true, image: true, price: true },
       });
       if (!drops.length) throw new Error("RECOVERY_POOL_EMPTY");
 
       const target = weightedPick(drops, lostValue);
+      if (!target) throw new Error("RECOVERY_POOL_EMPTY");
+
       const nearby = [...drops]
         .sort((a, b) => Math.abs(Number(a.price) - lostValue) - Math.abs(Number(b.price) - lostValue))
         .slice(0, Math.min(12, drops.length));
@@ -124,14 +128,11 @@ export async function POST(request: Request) {
       });
       await tx.operation.update({ where: { id: op.id }, data: { status: "CONSUMED", itemId: item.id } });
       await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_REWARD", itemId: item.id, amount: Math.round(target.price), status: "SUCCESS", label: `Кейс отыгрыша → ${target.name}`, idempotencyKey: key } });
-      return { recoveryCaseId: op.id, resultItem: publicItem(item), reelItems, reelTargetIndex: targetIndex, lostValue, alreadyConsumed: false };
+      return { recoveryCaseId: op.id, resultItem: publicItem(item), reelItems, reelTargetIndex: targetIndex, lostValue, minRecoveryValue, alreadyConsumed: false };
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "RECOVERY_FAILED";
-    // The client should never be presented with the old race-condition error.
-    // A valid-but-already-consumed case is handled above; this status is kept
-    // only for genuinely invalid/missing IDs that should never come from GET.
     return NextResponse.json({ error: code }, { status: code === "RECOVERY_CASE_NOT_FOUND" ? 404 : 400 });
   }
 }
