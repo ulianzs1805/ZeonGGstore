@@ -10,6 +10,8 @@ const RECOVERY_MAX_MULTIPLIER = 1.15;
 const REEL_SIZE = 31;
 const publicItem = (item: { id: string; name: string; rarity: string; image: string; price: number }) => ({ id: item.id, name: item.name, rarity: item.rarity, image: resolveSkinImage(item.name, item.image), price: Number(item.price) || 0 });
 
+type RecoveryDrop = { id: string; name: string; rarity: string; image: string; price: number };
+
 function shuffle<T>(items: T[]) {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -47,15 +49,30 @@ export async function POST(request: Request) {
       const lostValue = Number(meta.lostValue) || 0;
       if (lostValue <= 0) throw new Error("RECOVERY_VALUE_INVALID");
 
-      const drops = await tx.drop.findMany({
+      // Recovery is a fallback pool, so it must not depend on the special
+      // SYSTEM environment containing matching drops. Prefer rewards near the
+      // lost value, then gracefully fall back to the closest active drops.
+      const matchingDrops = await tx.drop.findMany({
         where: {
-          case: { environment: "SYSTEM", isActive: true },
+          case: { isActive: true },
           price: { gte: lostValue * RECOVERY_MIN_MULTIPLIER, lte: lostValue * RECOVERY_MAX_MULTIPLIER },
         },
         orderBy: [{ price: "asc" }, { name: "asc" }],
         select: { id: true, name: true, rarity: true, image: true, price: true },
       });
-      if (!drops.length) throw new Error("RECOVERY_POOL_EMPTY");
+
+      let drops: RecoveryDrop[] = matchingDrops;
+      if (!drops.length) {
+        const nearbyDrops = await tx.drop.findMany({
+          where: { case: { isActive: true }, price: { gt: 0 } },
+          orderBy: [{ price: "asc" }, { name: "asc" }],
+          select: { id: true, name: true, rarity: true, image: true, price: true },
+        });
+        if (!nearbyDrops.length) throw new Error("RECOVERY_POOL_EMPTY");
+        drops = [...nearbyDrops]
+          .sort((a, b) => Math.abs(Number(a.price) - lostValue) - Math.abs(Number(b.price) - lostValue))
+          .slice(0, Math.min(12, nearbyDrops.length));
+      }
 
       const shuffled = shuffle(drops);
       const target = shuffled[0];
