@@ -10,7 +10,7 @@ const RECOVERY_MAX_MULTIPLIER = 1.15;
 const REEL_SIZE = 31;
 const publicItem = (item: { id: string; name: string; rarity: string; image: string; price: number }) => ({ id: item.id, name: item.name, rarity: item.rarity, image: resolveSkinImage(item.name, item.image), price: Number(item.price) || 0 });
 
-type RecoveryDrop = { id: string; name: string; rarity: string; image: string; price: number };
+type RecoveryDrop = { id: string; caseId: string; name: string; rarity: string; image: string; price: number };
 
 function shuffle<T>(items: T[]) {
   const copy = [...items];
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
           price: { gte: lostValue * RECOVERY_MIN_MULTIPLIER, lte: lostValue * RECOVERY_MAX_MULTIPLIER },
         },
         orderBy: [{ price: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, rarity: true, image: true, price: true },
+        select: { id: true, caseId: true, name: true, rarity: true, image: true, price: true },
       });
 
       let drops: RecoveryDrop[] = matchingDrops;
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         const nearbyDrops = await tx.drop.findMany({
           where: { case: { isActive: true }, price: { gt: 0 } },
           orderBy: [{ price: "asc" }, { name: "asc" }],
-          select: { id: true, name: true, rarity: true, image: true, price: true },
+          select: { id: true, caseId: true, name: true, rarity: true, image: true, price: true },
         });
         if (!nearbyDrops.length) throw new Error("RECOVERY_POOL_EMPTY");
         drops = [...nearbyDrops]
@@ -81,7 +81,21 @@ export async function POST(request: Request) {
       reelPool[targetIndex] = target;
       const reelItems = reelPool.map((item, index) => ({ ...publicItem(item), id: `${item.id}-${index}` }));
 
-      const item = await tx.inventoryItem.create({ data: { userId: user.id, itemId: target.id, name: target.name, rarity: target.rarity, image: target.image, price: target.price } });
+      // A Recovery reward is a real inventory skin, exactly like a normal
+      // case reward. Persist the canonical drop/case reference as well as a
+      // snapshot of its display data so it can never become a "visual-only"
+      // reward or disappear from the inventory UI.
+      const item = await tx.inventoryItem.create({
+        data: {
+          userId: user.id,
+          itemId: target.id,
+          caseId: target.caseId,
+          name: target.name,
+          rarity: target.rarity,
+          image: target.image,
+          price: target.price,
+        },
+      });
       await tx.operation.update({ where: { id: op.id }, data: { status: "CONSUMED", itemId: item.id } });
       await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_REWARD", itemId: item.id, amount: Math.round(target.price), status: "SUCCESS", label: `Кейс отыгрыша → ${target.name}`, idempotencyKey: key } });
       return { recoveryCaseId: op.id, resultItem: publicItem(item), reelItems, reelTargetIndex: targetIndex, lostValue };
