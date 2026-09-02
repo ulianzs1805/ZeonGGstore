@@ -22,13 +22,14 @@ export default function UpgradeRecoveryInfo() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-3 w-[min(340px,calc(100vw-32px))] rounded-2xl border border-violet-300/20 bg-[#0d1020]/98 p-4 text-left shadow-[0_20px_70px_rgba(0,0,0,.55)] backdrop-blur-xl">
+        <div className="absolute right-0 mt-3 w-[min(360px,calc(100vw-32px))] rounded-2xl border border-violet-300/20 bg-[#0d1020]/98 p-4 text-left shadow-[0_20px_70px_rgba(0,0,0,.55)] backdrop-blur-xl">
           <p className="text-sm font-black text-white">Кейс отыгрыша</p>
           <div className="mt-3 space-y-2 text-xs leading-5 text-zinc-400">
-            <p><b className="text-violet-200">Шанс получить кейс — 50%.</b> После проигрыша апгрейда кейс не гарантирован.</p>
-            <p><b className="text-violet-200">Дроп тоже не гарантирован к возврату стоимости.</b> Из кейса можно получить предмет дешевле потерянного.</p>
-            <p>Можно получить примерно столько же, немного больше или намного больше потерянной суммы.</p>
-            <p className="text-zinc-500">Очень дорогой дроп — редкий исход: чем сильнее его стоимость превышает потерю, тем меньше его шанс.</p>
+            <p><b className="text-violet-200">Шанс получить кейс — 50%.</b> После проигрыша апгрейда кейс появляется не всегда.</p>
+            <p><b className="text-violet-200">Минимальная компенсация — 25% от потерянной суммы.</b> Например, при потере 2000 Z минимальная стоимость предмета из кейса — 500 Z.</p>
+            <p>Поэтому после проигрыша можно получить меньше потерянной суммы, примерно столько же или больше неё.</p>
+            <p><b className="text-emerald-300">Можно уйти в плюс.</b> Если стоимость полученного предмета выше потерянной суммы, результат отыгрыша перекрывает потерю.</p>
+            <p className="text-zinc-500">Чем сильнее стоимость дропа превышает потерю, тем реже такой исход. Кейс не гарантирует полный возврат или прибыль.</p>
           </div>
         </div>
       )}
