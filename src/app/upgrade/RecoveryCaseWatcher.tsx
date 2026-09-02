@@ -6,8 +6,10 @@ import RecoveryCaseModal from "@/components/upgrader/RecoveryCaseModal";
 type RecoveryCase = { id: string; lostValue: number; image?: string };
 type Reward = { id: string; name: string; image: string; price: number; rarity?: string };
 
-// The upgrade result animation is ~4.2s. Recovery must not cover it before the drop reaches the result.
-const RECOVERY_DELAY_MS = 4400;
+// Recovery must wait until the full upgrade sequence is finished:
+// 4.2s roulette + 2.2s burst + 2.2s gather = 8.6s before the cells are empty.
+// A small safety margin also accounts for the 1.2s polling interval.
+const RECOVERY_DELAY_MS = 9200;
 
 export default function RecoveryCaseWatcher() {
   const [recoveryCase, setRecoveryCase] = useState<RecoveryCase | null>(null);
