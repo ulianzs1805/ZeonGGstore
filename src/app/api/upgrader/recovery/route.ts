@@ -5,12 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { resolveSkinImage } from "@/lib/skin-image";
 
 const CASE_IMAGE = "/cases/recovery-body.svg";
-const RECOVERY_MIN_MULTIPLIER = 0.75;
-const RECOVERY_MAX_MULTIPLIER = 1.15;
+const RECOVERY_CASE_CHANCE = 0.5;
 const REEL_SIZE = 31;
 const publicItem = (item: { id: string; name: string; rarity: string; image: string; price: number }) => ({ id: item.id, name: item.name, rarity: item.rarity, image: resolveSkinImage(item.name, item.image), price: Number(item.price) || 0 });
 
 type RecoveryDrop = { id: string; caseId: string; name: string; rarity: string; image: string; price: number };
+
+type RecoveryMeta = { lostItemName?: string; lostItemImage?: string; lostItemRarity?: string; lostValue?: number };
 
 function shuffle<T>(items: T[]) {
   const copy = [...items];
@@ -21,13 +22,42 @@ function shuffle<T>(items: T[]) {
   return copy;
 }
 
+// Recovery is intentionally weighted rather than uniform. Items near the
+// lost value are common, slightly cheaper items are a little more common,
+// and expensive upside is possible but becomes very rare as the multiplier
+// grows. This keeps a 5,600 Z item possible after a ~2,400 Z loss without
+// making it a normal outcome.
+function recoveryWeight(price: number, lostValue: number) {
+  if (!Number.isFinite(price) || !Number.isFinite(lostValue) || price <= 0 || lostValue <= 0) return 0;
+  const ratio = price / lostValue;
+  if (ratio <= 1) {
+    return 0.2 + 1.35 * Math.exp(-Math.pow((1 - ratio) / 0.42, 2));
+  }
+  return 0.0005 + 0.95 * Math.exp(-Math.pow(Math.log(ratio) / 0.38, 2));
+}
+
+function weightedPick(items: RecoveryDrop[], lostValue: number) {
+  const weighted = items.map((item) => ({ item, weight: recoveryWeight(Number(item.price), lostValue) })).filter((entry) => entry.weight > 0);
+  if (!weighted.length) return items[randomInt(items.length)];
+  const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  let roll = (randomInt(1_000_000) / 1_000_000) * total;
+  for (const entry of weighted) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.item;
+  }
+  return weighted[weighted.length - 1].item;
+}
+
+async function parseMeta(label: string | null) {
+  try { return JSON.parse(label || "{}") as RecoveryMeta; } catch { return {}; }
+}
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   const op = await prisma.operation.findFirst({ where: { userId: user.id, type: "UPGRADE_RECOVERY_CASE", status: "OPEN" }, orderBy: { createdAt: "desc" } });
   if (!op) return NextResponse.json({ recoveryCase: null });
-  let meta: { lostItemName?: string; lostItemImage?: string; lostItemRarity?: string; lostValue?: number } = {};
-  try { meta = JSON.parse(op.label || "{}"); } catch {}
+  const meta = await parseMeta(op.label);
   return NextResponse.json({ recoveryCase: { id: op.id, image: CASE_IMAGE, ...meta } });
 }
 
@@ -38,53 +68,49 @@ export async function POST(request: Request) {
   const recoveryCaseId = typeof body?.recoveryCaseId === "string" ? body.recoveryCaseId : "";
   const key = typeof body?.idempotencyKey === "string" ? body.idempotencyKey.slice(0, 100) : "";
   if (!recoveryCaseId || !key) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
-  if (await prisma.operation.findUnique({ where: { idempotencyKey: key } })) return NextResponse.json({ error: "REPLAY" }, { status: 409 });
+
+  const replay = await prisma.operation.findUnique({ where: { idempotencyKey: key }, include: { item: true } });
+  if (replay) {
+    if (replay.type === "UPGRADE_RECOVERY_REWARD" && replay.item) return NextResponse.json({ ok: true, replay: true, resultItem: publicItem(replay.item) });
+    return NextResponse.json({ error: "REPLAY" }, { status: 409 });
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const op = await tx.operation.findFirst({ where: { id: recoveryCaseId, userId: user.id, type: "UPGRADE_RECOVERY_CASE", status: "OPEN" } });
+      const op = await tx.operation.findFirst({ where: { id: recoveryCaseId, userId: user.id, type: "UPGRADE_RECOVERY_CASE" }, include: { item: true } });
       if (!op) throw new Error("RECOVERY_CASE_NOT_FOUND");
-      let meta: { lostItemName?: string; lostItemImage?: string; lostItemRarity?: string; lostValue?: number } = {};
-      try { meta = JSON.parse(op.label || "{}"); } catch {}
+
+      // If another request already consumed this case, return the already
+      // created inventory item instead of surfacing RECOVERY_CASE_NOT_FOUND.
+      // This makes retries/double taps harmless and never creates a duplicate.
+      if (op.status === "CONSUMED" && op.item) {
+        const meta = await parseMeta(op.label);
+        return { recoveryCaseId: op.id, resultItem: publicItem(op.item), reelItems: [publicItem(op.item)], reelTargetIndex: 0, lostValue: Number(meta.lostValue) || 0, alreadyConsumed: true };
+      }
+      if (op.status !== "OPEN") throw new Error("RECOVERY_CASE_NOT_FOUND");
+
+      const meta = await parseMeta(op.label);
       const lostValue = Number(meta.lostValue) || 0;
       if (lostValue <= 0) throw new Error("RECOVERY_VALUE_INVALID");
 
-      // Recovery is a fallback pool, so it must not depend on the special
-      // SYSTEM environment containing matching drops. Prefer rewards near the
-      // lost value, then gracefully fall back to the closest active drops.
-      const matchingDrops = await tx.drop.findMany({
-        where: {
-          case: { isActive: true },
-          price: { gte: lostValue * RECOVERY_MIN_MULTIPLIER, lte: lostValue * RECOVERY_MAX_MULTIPLIER },
-        },
+      const drops = await tx.drop.findMany({
+        where: { case: { isActive: true }, price: { gt: 0 } },
         orderBy: [{ price: "asc" }, { name: "asc" }],
         select: { id: true, caseId: true, name: true, rarity: true, image: true, price: true },
       });
+      if (!drops.length) throw new Error("RECOVERY_POOL_EMPTY");
 
-      let drops: RecoveryDrop[] = matchingDrops;
-      if (!drops.length) {
-        const nearbyDrops = await tx.drop.findMany({
-          where: { case: { isActive: true }, price: { gt: 0 } },
-          orderBy: [{ price: "asc" }, { name: "asc" }],
-          select: { id: true, caseId: true, name: true, rarity: true, image: true, price: true },
-        });
-        if (!nearbyDrops.length) throw new Error("RECOVERY_POOL_EMPTY");
-        drops = [...nearbyDrops]
-          .sort((a, b) => Math.abs(Number(a.price) - lostValue) - Math.abs(Number(b.price) - lostValue))
-          .slice(0, Math.min(12, nearbyDrops.length));
-      }
-
-      const shuffled = shuffle(drops);
-      const target = shuffled[0];
+      const target = weightedPick(drops, lostValue);
+      const nearby = [...drops]
+        .sort((a, b) => Math.abs(Number(a.price) - lostValue) - Math.abs(Number(b.price) - lostValue))
+        .slice(0, Math.min(12, drops.length));
+      const pool = nearby.some((item) => item.id === target.id) ? nearby : [target, ...nearby.slice(0, 11)];
+      const shuffled = shuffle(pool);
       const reelPool = Array.from({ length: REEL_SIZE }, (_, index) => shuffled[index % shuffled.length]);
       const targetIndex = 24;
       reelPool[targetIndex] = target;
       const reelItems = reelPool.map((item, index) => ({ ...publicItem(item), id: `${item.id}-${index}` }));
 
-      // A Recovery reward is a real inventory skin, exactly like a normal
-      // case reward. Persist the canonical drop/case reference as well as a
-      // snapshot of its display data so it can never become a "visual-only"
-      // reward or disappear from the inventory UI.
       const item = await tx.inventoryItem.create({
         data: {
           userId: user.id,
@@ -98,11 +124,14 @@ export async function POST(request: Request) {
       });
       await tx.operation.update({ where: { id: op.id }, data: { status: "CONSUMED", itemId: item.id } });
       await tx.operation.create({ data: { userId: user.id, type: "UPGRADE_RECOVERY_REWARD", itemId: item.id, amount: Math.round(target.price), status: "SUCCESS", label: `Кейс отыгрыша → ${target.name}`, idempotencyKey: key } });
-      return { recoveryCaseId: op.id, resultItem: publicItem(item), reelItems, reelTargetIndex: targetIndex, lostValue };
+      return { recoveryCaseId: op.id, resultItem: publicItem(item), reelItems, reelTargetIndex: targetIndex, lostValue, alreadyConsumed: false };
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error: unknown) {
     const code = error instanceof Error ? error.message : "RECOVERY_FAILED";
+    // The client should never be presented with the old race-condition error.
+    // A valid-but-already-consumed case is handled above; this status is kept
+    // only for genuinely invalid/missing IDs that should never come from GET.
     return NextResponse.json({ error: code }, { status: code === "RECOVERY_CASE_NOT_FOUND" ? 404 : 400 });
   }
 }
