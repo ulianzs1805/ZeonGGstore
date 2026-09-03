@@ -21,7 +21,7 @@ const letterImages: Record<string, string> = {
 
 // Shared item-frame asset. If it is not present yet, the CSS frame remains visible.
 const ITEM_FRAME_SRC = "/bonuses/item-frame.png";
-const CASHBACK_SRC = "/bonuses/cashback.png";
+const CASHBACK_SRC = "/bonuses/cashback.svg";
 
 const fallbackWheel: WheelItem[] = [
   { type: "ZEON_SECRET", label: "ZEONGG Secret", icon: "Z", weight: 10 },
@@ -159,7 +159,7 @@ export default function FortuneWheelPage() {
                   <div className="absolute inset-[4%] rounded-full border border-white/[.07] shadow-[inset_0_0_45px_rgba(0,0,0,.8)]" />
                   {wheel.map((item, i) => <DrumCell key={item.type} item={item} index={i} angle={angle} selected={selected === i} letter={resultLetter} />)}
                   <div className="absolute inset-[28%] rounded-full border-[9px] border-[#171b23] bg-[#06080c] shadow-[inset_0_0_50px_rgba(0,0,0,.95),0_0_0_2px_rgba(255,255,255,.04)] sm:border-[13px]" />
-                  <div className="absolute inset-[33%] rounded-full border border-white/10 bg-[radial-gradient(circle_at_45%_35%,#171b24,#07090d_68%)] shadow-[inset_0_0_35px_rgba(0,0,0,.95)]" />
+                  <div className="absolute inset-[33%] rounded-full border border-white/10 bg-[radial-gradient(circle_at_45%_35%,#171b24,#07090d_68%)] shadow-[inset_0_0_35px_rgba(0,0,0,.95)] />
                 </div>
               </div>
               <div className="absolute left-1/2 top-[1.2%] z-[70] -translate-x-1/2"><div className="h-0 w-0 border-l-[18px] border-r-[18px] border-t-[30px] border-l-transparent border-r-transparent border-t-orange-300 drop-shadow-[0_0_18px_rgba(251,146,60,.85)] sm:border-l-[22px] sm:border-r-[22px] sm:border-t-[36px]" /></div>
