@@ -100,6 +100,13 @@ export async function POST(request: Request) {
     rewardValue = selected;
     innerRoulette = { items: pool.map((amount) => ({ key: String(amount), title: `+${amount} Z-Coin`, icon: "Z¢" })), selectedIndex: pool.indexOf(selected), title: "Z-Coin Rain" };
     label = `Z-Coin Rain: +${selected} Z-Coin`; metadata = { bonusType: reward.type, amount: selected };
+    if (!r.includes('fortune-zcoin-grant')) {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
+        await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
+        await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
+      });
+    }
   } else if (reward.type === "Z_BOOST") {
     metadata = { bonusType: reward.type, percent: 25, nextRewardOnly: true };
   } else if (reward.type === "LUCKY_DROP") metadata = { bonusType: reward.type, effect: "next_drop_rarity_boost", nextCaseOnly: true };
