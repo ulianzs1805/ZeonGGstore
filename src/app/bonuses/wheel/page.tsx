@@ -170,7 +170,7 @@ export default function FortuneWheelPage() {
               <div className="absolute inset-[50%] z-30 h-[6%] w-[6%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-300 shadow-[0_0_25px_rgba(251,146,60,.9)]" />
               <div className="absolute left-1/2 top-[-1%] z-40 h-0 w-0 -translate-x-1/2 border-l-[13px] border-r-[13px] border-t-[28px] border-l-transparent border-r-transparent border-t-orange-300 drop-shadow-[0_0_12px_rgba(251,146,60,.8)]" />
               <div className="absolute inset-[6%] transition-transform duration-[5s] ease-[cubic-bezier(.08,.72,.12,1)]" style={{ transform: `rotate(${rotation}deg)` }}>
-                {wheel.map((item, i) => <DrumCell key={`${item.type}-${i}`} item={item} index={i} angle={angle} selected={selected === i} letter={item.type === "ZEON_SECRET" ? resultLetter : undefined} />)}
+                {wheel.map((item, i) => <DrumCell key={`${item.type}-${i}`} item={item} index={i} angle={angle} selected={result?.rewardType === item.type} letter={item.type === "ZEON_SECRET" ? resultLetter : undefined} />)}
               </div>
               <button type="button" onClick={spin} disabled={spinning || innerSpinning} className="absolute inset-[42%] z-50 rounded-full border-2 border-orange-300/50 bg-[#0b0d12] text-[9px] font-black uppercase tracking-[.15em] text-orange-100 shadow-[0_0_35px_rgba(251,146,60,.25)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50">{spinning ? "Крутим" : innerSpinning ? "Дроп" : "Крутить"}</button>
               {showInnerRoulette && result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}
