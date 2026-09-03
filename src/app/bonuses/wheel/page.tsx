@@ -82,17 +82,14 @@ function DrumCell({ item, index, angle, selected, letter }: { item: WheelItem; i
   const mid = index * angle + angle / 2;
   const isLetter = item.type === "ZEON_SECRET";
   const isCashback = item.type === "CASHBACK" || item.label.toLowerCase().includes("cashback") || item.label.toLowerCase().includes("кешбек") || item.label.toLowerCase().includes("кэшбек");
-  const image = isLetter && letter ? letterImages[letter] : isCashback ? CASHBACK_SRC : undefined;
+  const image = isLetter ? (letter ? letterImages[letter] : letterImages["Z"]) : isCashback ? CASHBACK_SRC : undefined;
   return <div className="absolute left-1/2 top-1/2 h-[25%] w-[25%] -translate-x-1/2 -translate-y-1/2" style={{ transform: `rotate(${mid}deg) translateY(-151%)` }}>
     <div className={`relative h-full w-full rounded-full border-[6px] bg-[radial-gradient(circle_at_35%_30%,#202632,#090b10_62%,#050608)] shadow-[inset_0_0_22px_rgba(0,0,0,.95),0_8px_25px_rgba(0,0,0,.65)] transition-all duration-300 sm:border-[8px] ${selected ? "border-orange-300 shadow-[0_0_38px_rgba(251,146,60,.75),inset_0_0_30px_rgba(251,146,60,.14)]" : "border-[#292e39]"}`}>
       <div className="absolute inset-[9%] rounded-full border border-white/[.08]" />
       <div className="absolute inset-[17%] grid place-items-center overflow-hidden rounded-full bg-[#07090d] shadow-[inset_0_0_22px_rgba(0,0,0,.9)]">
-        {image ? <img src={image} alt={isCashback ? "CashBack" : letter || ""} className={`object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.45)] ${isCashback ? "h-[78%] w-[78%]" : "h-[68%] w-[68%]"}`} onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-700 sm:text-xs">{isLetter ? "?" : ""}</span>}
+        {image ? <img src={image} alt={isCashback ? "CashBack" : letter || "ZEONGG"} className="h-[92%] w-[92%] object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.55)]" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
       </div>
       {selected && <div className="absolute inset-[6%] rounded-full border border-orange-300/50 animate-pulse" />}
-    </div>
-    <div className="pointer-events-none absolute left-1/2 top-[111%] w-[175%] -translate-x-1/2 text-center" style={{ transform: `translateX(-50%) rotate(${-mid}deg)` }}>
-      <span className={`text-[7px] font-black uppercase leading-3 drop-shadow-[0_2px_8px_rgba(0,0,0,.95)] sm:text-[9px] ${selected ? "text-orange-100" : "text-slate-300"}`}>{item.label}</span>
     </div>
   </div>;
 }
@@ -117,7 +114,7 @@ export default function FortuneWheelPage() {
 
   async function spin() {
     if (spinning || innerSpinning || !wheel.length) return;
-    setSpinning(true); setResult(null); setError("");
+    setSpinning(true); setInnerSpinning(false); setResult(null); setError("");
     try {
       const r = await fetch("/api/bonuses/fortune", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }) });
       const data: Result = await r.json();
@@ -126,7 +123,8 @@ export default function FortuneWheelPage() {
       setRotation((current) => current - 360 * 9 - (index + 0.5) * angle);
       const outer = window.setTimeout(() => {
         setSpinning(false); setResult(data); if (data.letterState) setLetterState(data.letterState); window.dispatchEvent(new Event("zeon-profile-updated"));
-        if (data.innerRoulette) { setInnerSpinning(true); const inner = window.setTimeout(() => setInnerSpinning(false), 4400); timers.current.push(inner); }
+        const showInnerRoulette = !!data.innerRoulette && (data.rewardType === "DEPOSIT_BONUS" || data.rewardType === "ZCOIN_RAIN" || data.rewardType === "ZEON_SECRET");
+        if (showInnerRoulette) { setInnerSpinning(true); const inner = window.setTimeout(() => setInnerSpinning(false), 4400); timers.current.push(inner); }
       }, 5050);
       timers.current.push(outer);
     } catch (e) { setError(e instanceof Error ? e.message : "Ошибка барабана"); setSpinning(false); }
@@ -134,6 +132,7 @@ export default function FortuneWheelPage() {
 
   const selected = result?.sectorIndex;
   const resultLetter = result?.metadata?.letter;
+  const showInnerRoulette = !!result?.innerRoulette && (result.rewardType === "DEPOSIT_BONUS" || result.rewardType === "ZCOIN_RAIN" || result.rewardType === "ZEON_SECRET");
   const letterIds = ["Z", "E", "O", "N", "G1", "G2"];
 
   return <main className="min-h-screen overflow-hidden bg-[#030407] text-white">
@@ -161,7 +160,7 @@ export default function FortuneWheelPage() {
                 {wheel.map((item, i) => <DrumCell key={`${item.type}-${i}`} item={item} index={i} angle={angle} selected={selected === i} letter={selected === i ? resultLetter : undefined} />)}
               </div>
               <button type="button" onClick={spin} disabled={spinning || innerSpinning} className="absolute inset-[42%] z-50 rounded-full border-2 border-orange-300/50 bg-[#0b0d12] text-[9px] font-black uppercase tracking-[.15em] text-orange-100 shadow-[0_0_35px_rgba(251,146,60,.25)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50">{spinning ? "Крутим" : innerSpinning ? "Дроп" : "Крутить"}</button>
-              {result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}
+              {showInnerRoulette && result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}
             </div>
           </div>
 
