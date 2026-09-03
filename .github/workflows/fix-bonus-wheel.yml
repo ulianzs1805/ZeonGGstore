@@ -1,0 +1,45 @@
+name: Fix bonus wheel visuals
+
+on:
+  push:
+    branches: [terminal]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: terminal
+          fetch-depth: 0
+      - name: Patch bonus wheel
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/bonuses/wheel/page.tsx')
+          s = p.read_text()
+          s = s.replace('const image = isLetter && letter ? letterImages[letter] : isCashback ? CASHBACK_SRC : undefined;', 'const image = isLetter ? (letter ? letterImages[letter] : letterImages["Z"]) : isCashback ? CASHBACK_SRC : undefined;')
+          old = '''{image ? <img src={image} alt={isCashback ? "CashBack" : letter || ""} className={`object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.45)] ${isCashback ? "h-[78%] w-[78%]" : "h-[68%] w-[68%]"}`} onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-700 sm:text-xs">{isLetter ? "?" : ""}</span>}'''
+          new = '''{image ? <img src={image} alt={isCashback ? "CashBack" : letter || "ZEONGG"} className="h-[92%] w-[92%] object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.55)]" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}'''
+          if old not in s: raise SystemExit('image JSX anchor not found')
+          s = s.replace(old, new, 1)
+          old = '''    <div className="pointer-events-none absolute left-1/2 top-[111%] w-[175%] -translate-x-1/2 text-center" style={{ transform: `translateX(-50%) rotate(${-mid}deg)` }}>\n      <span className={`text-[7px] font-black uppercase leading-3 drop-shadow-[0_2px_8px_rgba(0,0,0,.95)] sm:text-[9px] ${selected ? "text-orange-100" : "text-slate-300"}`}>{item.label}</span>\n    </div>\n'''
+          if old not in s: raise SystemExit('label anchor not found')
+          s = s.replace(old, '', 1)
+          s = s.replace('setSpinning(true); setResult(null); setError("");', 'setSpinning(true); setInnerSpinning(false); setResult(null); setError("");', 1)
+          s = s.replace('if (data.innerRoulette) { setInnerSpinning(true); const inner = window.setTimeout(() => setInnerSpinning(false), 4400); timers.current.push(inner); }', 'const showInnerRoulette = !!data.innerRoulette && (data.rewardType === "DEPOSIT_BONUS" || data.rewardType === "ZCOIN_RAIN" || data.rewardType === "ZEON_SECRET");\n        if (showInnerRoulette) { setInnerSpinning(true); const inner = window.setTimeout(() => setInnerSpinning(false), 4400); timers.current.push(inner); }', 1)
+          s = s.replace('const resultLetter = result?.metadata?.letter;\n  const letterIds', 'const resultLetter = result?.metadata?.letter;\n  const showInnerRoulette = !!result?.innerRoulette && (result.rewardType === "DEPOSIT_BONUS" || result.rewardType === "ZCOIN_RAIN" || result.rewardType === "ZEON_SECRET");\n  const letterIds', 1)
+          s = s.replace('{result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}', '{showInnerRoulette && result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}')
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/bonuses/wheel/page.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "fix bonus wheel images and labels"
+          git push origin terminal
