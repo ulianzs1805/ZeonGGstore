@@ -34,8 +34,8 @@ jobs:
           route = Path('src/app/api/bonuses/fortune/route.ts')
           r = route.read_text()
           marker = 'label = `Z-Coin Rain: +${selected} Z-Coin`; metadata = { bonusType: reward.type, amount: selected };'
-          grant = '''label = `Z-Coin Rain: +${selected} Z-Coin`; metadata = { bonusType: reward.type, amount: selected };\n    if (!r.includes('fortune-zcoin-grant')) {\n      await prisma.$transaction(async (tx) => {\n        await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });\n        await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });\n        await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });\n      });\n    }'''
-          if marker in r and 'fortune-zcoin-grant' not in r:
+          grant = '''label = `Z-Coin Rain: +${selected} Z-Coin`; metadata = { bonusType: reward.type, amount: selected };\n    await prisma.$transaction(async (tx) => {\n      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });\n      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });\n      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });\n    });'''
+          if marker in r:
               r = r.replace(marker, grant, 1)
           route.write_text(r)
           PY
