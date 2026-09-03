@@ -64,11 +64,20 @@ function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: 
   const items = Array.from({ length: 9 }, () => data.items).flat();
   const target = data.selectedIndex + data.items.length * 4;
   const card = 116;
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    setOffset(0);
+    if (!spinning) return;
+    const frame = window.requestAnimationFrame(() => setOffset(target));
+    return () => window.cancelAnimationFrame(frame);
+  }, [data.selectedIndex, data.items.length, target, spinning]);
+
   return <div className="absolute inset-x-[4%] top-1/2 z-50 -translate-y-1/2 rounded-[24px] border border-orange-300/25 bg-[#070910]/[.98] p-3 shadow-[0_30px_100px_rgba(0,0,0,.95)] backdrop-blur-xl sm:inset-x-[7%] sm:p-4">
     <div className="mb-2 flex items-center justify-between px-1 text-[8px] font-black uppercase tracking-[.2em]"><span className="text-slate-500">Финальный дроп</span><span className="text-orange-300">{data.title}</span></div>
     <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#020409] py-3">
       <div className="pointer-events-none absolute inset-y-0 left-1/2 z-30 w-[3px] -translate-x-1/2 bg-orange-300 shadow-[0_0_22px_rgba(251,146,60,.95)]" />
-      <div className="flex w-max gap-2" style={{ transform: `translateX(calc(50% - ${card / 2}px - ${target * (card + 8)}px))`, transition: spinning ? "transform 4.25s cubic-bezier(.08,.72,.12,1)" : "transform .3s ease-out" }}>
+      <div className="flex w-max gap-2" style={{ transform: `translateX(calc(50% - ${card / 2}px - ${offset * (card + 8)}px))`, transition: spinning ? "transform 4.25s cubic-bezier(.08,.72,.12,1)" : "transform .3s ease-out" }}>
         {items.map((item, i) => <div key={`${item.key}-${i}`} className="flex h-[104px] w-[116px] shrink-0 flex-col items-center justify-center rounded-xl border border-white/10 bg-[#11151d] px-2 text-center">
           <FramedItem item={item} compact />
           <b className="mt-1 line-clamp-2 text-[9px] leading-3 text-white">{item.title}</b>{item.subtitle && <small className="mt-0.5 text-[7px] text-slate-500">{item.subtitle}</small>}
@@ -81,13 +90,13 @@ function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: 
 function DrumCell({ item, index, angle, selected, letter }: { item: WheelItem; index: number; angle: number; selected: boolean; letter?: string }) {
   const mid = index * angle + angle / 2;
   const isLetter = item.type === "ZEON_SECRET";
-  const isCashback = item.type === "CASHBACK" || item.label.toLowerCase().includes("cashback") || item.label.toLowerCase().includes("кешбек") || item.label.toLowerCase().includes("кэшбек");
+  const isCashback = item.type === "CASHBACK" || item.type === "DEPOSIT_BONUS" || item.label.toLowerCase().includes("cashback") || item.label.toLowerCase().includes("кешбек") || item.label.toLowerCase().includes("кэшбек");
   const image = isLetter ? (letter ? letterImages[letter] : letterImages["Z"]) : isCashback ? CASHBACK_SRC : undefined;
   return <div className="absolute left-1/2 top-1/2 h-[25%] w-[25%] -translate-x-1/2 -translate-y-1/2" style={{ transform: `rotate(${mid}deg) translateY(-151%)` }}>
     <div className={`relative h-full w-full rounded-full border-[6px] bg-[radial-gradient(circle_at_35%_30%,#202632,#090b10_62%,#050608)] shadow-[inset_0_0_22px_rgba(0,0,0,.95),0_8px_25px_rgba(0,0,0,.65)] transition-all duration-300 sm:border-[8px] ${selected ? "border-orange-300 shadow-[0_0_38px_rgba(251,146,60,.75),inset_0_0_30px_rgba(251,146,60,.14)]" : "border-[#292e39]"}`}>
       <div className="absolute inset-[9%] rounded-full border border-white/[.08]" />
       <div className="absolute inset-[17%] grid place-items-center overflow-hidden rounded-full bg-[#07090d] shadow-[inset_0_0_22px_rgba(0,0,0,.9)]">
-        {image ? <img src={image} alt={isCashback ? "CashBack" : letter || "ZEONGG"} className="h-[92%] w-[92%] object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.55)]" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
+        {image ? <img src={image} alt={isCashback ? "CashBack" : letter || "ZEONGG"} className={`object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.55)] ${isCashback ? "h-[96%] w-[96%]" : "h-[92%] w-[92%]"}`} onError={(event) => { event.currentTarget.style.display = "none"; }} /> : null}
       </div>
       {selected && <div className="absolute inset-[6%] rounded-full border border-orange-300/50 animate-pulse" />}
     </div>
