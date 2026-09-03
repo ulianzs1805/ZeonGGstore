@@ -20,7 +20,7 @@ const letterImages: Record<string, string> = {
 };
 
 const ITEM_FRAME_SRC = "/bonuses/item-frame.png";
-const CASHBACK_SRC = "/bonuses/cashback.svg";
+const CASHBACK_SRC = "/bonuses/CashBack.png";
 
 const fallbackWheel: WheelItem[] = [
   { type: "ZEON_SECRET", label: "ZEONGG Secret", icon: "Z", weight: 10 },
@@ -110,6 +110,7 @@ export default function FortuneWheelPage() {
   const [spinning, setSpinning] = useState(false);
   const [innerSpinning, setInnerSpinning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  const [rollingLetter, setRollingLetter] = useState<string | undefined>(undefined);
   const [error, setError] = useState("");
   const timers = useRef<number[]>([]);
 
@@ -124,23 +125,26 @@ export default function FortuneWheelPage() {
   async function spin() {
     if (spinning || innerSpinning || !wheel.length) return;
     setSpinning(true); setInnerSpinning(false); setResult(null); setError("");
+    const missingLetters = ["Z", "E", "O", "N", "G1", "G2"].filter((id) => !letterState.collected.includes(id));
+    setRollingLetter(missingLetters.length ? missingLetters[Math.floor(Math.random() * missingLetters.length)] : undefined);
     try {
       const r = await fetch("/api/bonuses/fortune", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }) });
       const data: Result = await r.json();
       if (!r.ok) throw new Error((data as unknown as { error?: string }).error || "Не удалось прокрутить барабан");
+      if (data.metadata?.letter) setRollingLetter(data.metadata.letter);
       const index = Number.isInteger(data.sectorIndex) ? data.sectorIndex : 0;
       setRotation((current) => current - 360 * 9 - (index + 0.5) * angle);
       const outer = window.setTimeout(() => {
-        setSpinning(false); setResult(data); if (data.letterState) setLetterState(data.letterState); window.dispatchEvent(new Event("zeon-profile-updated"));
+        setSpinning(false); setResult(data); setRollingLetter(data.metadata?.letter); if (data.letterState) setLetterState(data.letterState); window.dispatchEvent(new Event("zeon-profile-updated"));
         const showInnerRoulette = !!data.innerRoulette && (data.rewardType === "DEPOSIT_BONUS" || data.rewardType === "ZCOIN_RAIN" || data.rewardType === "ZEON_SECRET");
         if (showInnerRoulette) { setInnerSpinning(true); const inner = window.setTimeout(() => setInnerSpinning(false), 4400); timers.current.push(inner); }
       }, 5050);
       timers.current.push(outer);
-    } catch (e) { setError(e instanceof Error ? e.message : "Ошибка барабана"); setSpinning(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Ошибка барабана"); setSpinning(false); setRollingLetter(undefined); }
   }
 
   const selected = result?.sectorIndex;
-  const resultLetter = result?.metadata?.letter;
+  const resultLetter = result?.metadata?.letter ?? rollingLetter;
   const showInnerRoulette = !!result?.innerRoulette && (result.rewardType === "DEPOSIT_BONUS" || result.rewardType === "ZCOIN_RAIN" || result.rewardType === "ZEON_SECRET");
   const letterIds = ["Z", "E", "O", "N", "G1", "G2"];
 
@@ -166,7 +170,7 @@ export default function FortuneWheelPage() {
               <div className="absolute inset-[50%] z-30 h-[6%] w-[6%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-300 shadow-[0_0_25px_rgba(251,146,60,.9)]" />
               <div className="absolute left-1/2 top-[-1%] z-40 h-0 w-0 -translate-x-1/2 border-l-[13px] border-r-[13px] border-t-[28px] border-l-transparent border-r-transparent border-t-orange-300 drop-shadow-[0_0_12px_rgba(251,146,60,.8)]" />
               <div className="absolute inset-[6%] transition-transform duration-[5s] ease-[cubic-bezier(.08,.72,.12,1)]" style={{ transform: `rotate(${rotation}deg)` }}>
-                {wheel.map((item, i) => <DrumCell key={`${item.type}-${i}`} item={item} index={i} angle={angle} selected={selected === i} letter={selected === i ? resultLetter : undefined} />)}
+                {wheel.map((item, i) => <DrumCell key={`${item.type}-${i}`} item={item} index={i} angle={angle} selected={selected === i} letter={item.type === "ZEON_SECRET" ? resultLetter : undefined} />)}
               </div>
               <button type="button" onClick={spin} disabled={spinning || innerSpinning} className="absolute inset-[42%] z-50 rounded-full border-2 border-orange-300/50 bg-[#0b0d12] text-[9px] font-black uppercase tracking-[.15em] text-orange-100 shadow-[0_0_35px_rgba(251,146,60,.25)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50">{spinning ? "Крутим" : innerSpinning ? "Дроп" : "Крутить"}</button>
               {showInnerRoulette && result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}
