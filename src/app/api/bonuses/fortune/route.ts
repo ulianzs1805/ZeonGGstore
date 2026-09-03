@@ -35,56 +35,12 @@ export async function POST(request: Request) {
     const missing = letterSlots.filter((slot) => !state.collected.includes(slot)); if (!missing.length) return NextResponse.json({ error: "ZEONGG уже собрано." }, { status: 409 }); const slotId = weightedPick(missing.map((slot) => ({ item: slot, weight: 1 }))); const next = [...state.collected, slotId]; const completed = letterSlots.every((slot) => next.includes(slot)); const letter = slotId.startsWith("G") ? "G" : slotId; const completionReward = completed ? 50 + Math.floor(Math.random() * 451) : null; innerRoulette = { items: letterSlots.map((slot, i) => ({ key: slot, title: slot.startsWith("G") ? "G" : slot, subtitle: `слот ${i + 1}`, icon: slot.startsWith("G") ? "G" : slot })), selectedIndex: letterSlots.indexOf(slotId), title: "ZEONGG — выбираем букву" }; label = completed ? `ZEONGG собрано! +${completionReward} Z-Coin` : `Буква «${letter}» получена`; rewardValue = completionReward; metadata = { bonusType: reward.type, letter, slotId, word: "ZEONGG", zeonggUnlocked: completed, completionReward };
     if (completed && completionReward) await prisma.$transaction(async (tx) => { await tx.user.update({ where: { id: user.id }, data: { balance: { increment: completionReward } } }); await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: completionReward, status: "SUCCESS" } }); await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Награда за сбор слова ZEONGG: ${completionReward} Z-Coin`, amount: completionReward, status: "SUCCESS", idempotencyKey: `zeongg-reward:${idempotencyKey}` } }); await tx.notification.create({ data: { userId: user.id, type: "ZCOIN_GRANT", title: "ZEONGG собрано!", body: `Вам начислено ${completionReward} Z-Coin.` } }); });
   } else if (reward.type === "DEPOSIT_BONUS") {
-    const selected = weightedPick(depositRewards.map((item) => ({ item, weight: item.weight }))); innerRoulette = { items: depositRewards.map((item) => ({ key: String(item.amount), title: `+${item.amount}%`, subtitle: "к пополнению", image: "/bonuses/CashBack.png" })), selectedIndex: depositRewards.findIndex((item) => item.amount === selected.amount), title: "Бонус на депозит" }; rewardValue = selected.amount; label = `Депозитный бонус: +${selected.amount}%`; metadata = { bonusType: reward.type, percent: selected.amount, onDeposit: true, chanceWeight: selected.weight, image: "/bonuses/CashBack.png" };
+    const selected = weightedPick(depositRewards.map((item) => ({ item, weight: item.weight }))); innerRoulette = { items: depositRewards.map((item) => ({ key: String(item.amount), title: `+${item.amount}%`, subtitle: "к пополнению", image: "/bonuses/cashback.svg" })), selectedIndex: depositRewards.findIndex((item) => item.amount === selected.amount), title: "Бонус на депозит" }; rewardValue = selected.amount; label = `Депозитный бонус: +${selected.amount}%`; metadata = { bonusType: reward.type, percent: selected.amount, onDeposit: true, chanceWeight: selected.weight, image: "/bonuses/cashback.svg" };
   } else if (reward.type === "FREE_CASE") {
     if (!cases.length) return NextResponse.json({ error: "Сейчас нет доступных кейсов." }, { status: 409 }); const selected = weightedPick(cases.map((item) => ({ item, weight: 1 / Math.max(1, item.price) }))); caseId = selected.id; label = `Бесплатное открытие: ${selected.name}`; metadata = { bonusType: reward.type, caseId, caseName: selected.name, caseImage: selected.image }; await prisma.freeCaseGrant.create({ data: { userId: user.id, caseId: selected.id } });
   } else if (reward.type === "ZCOIN_RAIN") {
     const pool = [50, 75, 100, 150, 250, 500]; const selected = weightedPick(pool.map((amount) => ({ item: amount, weight: amount >= 500 ? 1 : amount >= 250 ? 2 : 5 }))); rewardValue = selected; innerRoulette = { items: pool.map((amount) => ({ key: String(amount), title: `+${amount} Z-Coin`, icon: "Z¢" })), selectedIndex: pool.indexOf(selected), title: "Z-Coin Rain" }; label = `Z-Coin Rain: +${selected} Z-Coin`; metadata = { bonusType: reward.type, amount: selected };
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } });
-      await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } });
-      await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } });
-    });
+    await prisma.$transaction(async (tx) => { await tx.user.update({ where: { id: user.id }, data: { balance: { increment: selected } } }); await tx.transaction.create({ data: { userId: user.id, type: "ZCOIN_GRANT", zCoinAmount: selected, status: "SUCCESS" } }); await tx.operation.create({ data: { userId: user.id, type: "ZCOIN_GRANT", label: `Z-Coin Rain: ${selected} Z-Coin`, amount: selected, status: "SUCCESS", idempotencyKey: `fortune-zcoin-grant:${idempotencyKey}` } }); });
   } else if (reward.type === "Z_BOOST") metadata = { bonusType: reward.type, percent: 25, nextRewardOnly: true };
   else if (reward.type === "LUCKY_DROP") metadata = { bonusType: reward.type, effect: "next_drop_rarity_boost", nextCaseOnly: true };
   else if (reward.type === "SAFE_OPEN") metadata = { bonusType: reward.type, effect: "protect_from_lowest_drop", nextCaseOnly: true };
