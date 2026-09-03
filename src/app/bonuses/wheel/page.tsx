@@ -19,6 +19,10 @@ const letterImages: Record<string, string> = {
   G2: "/bonuses/letter_G2.png",
 };
 
+// Shared item-frame asset. If it is not present yet, the CSS frame remains visible.
+const ITEM_FRAME_SRC = "/bonuses/item-frame.png";
+const CASHBACK_SRC = "/bonuses/cashback.png";
+
 const fallbackWheel: WheelItem[] = [
   { type: "ZEON_SECRET", label: "ZEONGG Secret", icon: "Z", weight: 10 },
   { type: "DEPOSIT_BONUS", label: "Депозит +5–35%", icon: "%", weight: 12 },
@@ -48,6 +52,15 @@ function Letter({ id, collected }: { id: string; collected: boolean }) {
   </div>;
 }
 
+function FramedItem({ item, compact = false }: { item: InnerItem; compact?: boolean }) {
+  return <div className={`relative overflow-hidden ${compact ? "h-14 w-14" : "h-16 w-16"}`}>
+    <div className="absolute inset-0 rounded-xl border border-orange-300/25 bg-[radial-gradient(circle_at_35%_25%,#252b38,#080a0f_70%)] shadow-[inset_0_0_18px_rgba(0,0,0,.9),0_0_18px_rgba(0,0,0,.35)]" />
+    {item.image && <img src={item.image} alt="" className="absolute inset-[9%] h-[82%] w-[82%] object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,.8)]" onError={(event) => { event.currentTarget.style.display = "none"; }} />}
+    {item.icon && !item.image && <span className="absolute inset-0 grid place-items-center text-[11px] font-black text-orange-200">{item.icon}</span>}
+    <img src={ITEM_FRAME_SRC} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 h-full w-full object-fill" onError={(event) => { event.currentTarget.style.display = "none"; }} />
+  </div>;
+}
+
 function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: boolean }) {
   const items = Array.from({ length: 9 }, () => data.items).flat();
   const target = data.selectedIndex + data.items.length * 4;
@@ -58,8 +71,8 @@ function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: 
       <div className="pointer-events-none absolute inset-y-0 left-1/2 z-30 w-[3px] -translate-x-1/2 bg-orange-300 shadow-[0_0_22px_rgba(251,146,60,.95)]" />
       <div className="flex w-max gap-2" style={{ transform: `translateX(calc(50% - ${card / 2}px - ${target * (card + 8)}px))`, transition: spinning ? "transform 4.25s cubic-bezier(.08,.72,.12,1)" : "transform .3s ease-out" }}>
         {items.map((item, i) => <div key={`${item.key}-${i}`} className="flex h-[104px] w-[116px] shrink-0 flex-col items-center justify-center rounded-xl border border-white/10 bg-[#11151d] px-2 text-center">
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-orange-300/15 bg-orange-400/5 text-[10px] font-black text-orange-200">{item.image ? <img src={item.image} alt="" className="h-full w-full object-contain" /> : item.icon ?? "✦"}</div>
-          <b className="mt-2 line-clamp-2 text-[9px] leading-3 text-white">{item.title}</b>{item.subtitle && <small className="mt-0.5 text-[7px] text-slate-500">{item.subtitle}</small>}
+          <FramedItem item={item} compact />
+          <b className="mt-1 line-clamp-2 text-[9px] leading-3 text-white">{item.title}</b>{item.subtitle && <small className="mt-0.5 text-[7px] text-slate-500">{item.subtitle}</small>}
         </div>)}
       </div>
     </div>
