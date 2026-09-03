@@ -42,7 +42,7 @@ img {
 }
 
 /* Upgrader: side columns must never resize from weapon name or PNG dimensions. */
-.grid.grid-cols-\[\.9fr_1\.25fr_\.9fr\] {
+.grid\.grid-cols-\[\.9fr_1\.25fr_\.9fr\] {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 0.9fr) !important;
 }
 
@@ -50,7 +50,7 @@ img {
   min-width: 0;
 }
 
-.grid.grid-cols-\[\.9fr_1\.25fr_\.9fr\] > .flex {
+.grid\.grid-cols-\[\.9fr_1\.25fr_\.9fr\] > .flex {
   width: 100%;
 }
 
@@ -59,7 +59,7 @@ img {
   width: 60% !important;
   right: -1% !important;
   background-size: 180% auto !important;
-  background-position: 76% 54% !important;
+  background-position: 76% 55% !important;
   opacity: 1 !important;
   filter: drop-shadow(-18px 0 34px rgba(124, 58, 237, 0.28)) drop-shadow(16px 0 34px rgba(255, 132, 43, 0.18));
 }
@@ -103,4 +103,14 @@ img {
     transform: translate(var(--fixed-x), var(--fixed-y)) rotate(0deg) scale(1);
     filter: brightness(1.35) saturate(1.1);
   }
+}
+
+/* Bonus wheel: every raster image inside a drum cell is clipped to the full circular viewport. */
+img[src="/bonuses/CashBack.png"],
+img[src^="/bonuses/letter_"] {
+  border-radius: 9999px !important;
+  clip-path: circle(50% at 50% 50%) !important;
+  -webkit-clip-path: circle(50% at 50% 50%) !important;
+  object-fit: cover !important;
+  object-position: center !important;
 }
