@@ -19,7 +19,6 @@ const letterImages: Record<string, string> = {
   G2: "/bonuses/letter_G2.png",
 };
 
-// Shared item-frame asset. If it is not present yet, the CSS frame remains visible.
 const ITEM_FRAME_SRC = "/bonuses/item-frame.png";
 const CASHBACK_SRC = "/bonuses/cashback.svg";
 
@@ -82,12 +81,13 @@ function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: 
 function DrumCell({ item, index, angle, selected, letter }: { item: WheelItem; index: number; angle: number; selected: boolean; letter?: string }) {
   const mid = index * angle + angle / 2;
   const isLetter = item.type === "ZEON_SECRET";
-  const image = isLetter && letter ? letterImages[letter] : undefined;
+  const isCashback = item.type === "CASHBACK" || item.label.toLowerCase().includes("cashback") || item.label.toLowerCase().includes("кешбек") || item.label.toLowerCase().includes("кэшбек");
+  const image = isLetter && letter ? letterImages[letter] : isCashback ? CASHBACK_SRC : undefined;
   return <div className="absolute left-1/2 top-1/2 h-[25%] w-[25%] -translate-x-1/2 -translate-y-1/2" style={{ transform: `rotate(${mid}deg) translateY(-151%)` }}>
     <div className={`relative h-full w-full rounded-full border-[6px] bg-[radial-gradient(circle_at_35%_30%,#202632,#090b10_62%,#050608)] shadow-[inset_0_0_22px_rgba(0,0,0,.95),0_8px_25px_rgba(0,0,0,.65)] transition-all duration-300 sm:border-[8px] ${selected ? "border-orange-300 shadow-[0_0_38px_rgba(251,146,60,.75),inset_0_0_30px_rgba(251,146,60,.14)]" : "border-[#292e39]"}`}>
       <div className="absolute inset-[9%] rounded-full border border-white/[.08]" />
       <div className="absolute inset-[17%] grid place-items-center overflow-hidden rounded-full bg-[#07090d] shadow-[inset_0_0_22px_rgba(0,0,0,.9)]">
-        {image ? <img src={image} alt={letter} className="h-[68%] w-[68%] object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.45)]" /> : <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-700 sm:text-xs">{isLetter ? "?" : ""}</span>}
+        {image ? <img src={image} alt={isCashback ? "CashBack" : letter || ""} className={`object-contain drop-shadow-[0_0_12px_rgba(255,160,70,.45)] ${isCashback ? "h-[78%] w-[78%]" : "h-[68%] w-[68%]"}`} onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-700 sm:text-xs">{isLetter ? "?" : ""}</span>}
       </div>
       {selected && <div className="absolute inset-[6%] rounded-full border border-orange-300/50 animate-pulse" />}
     </div>
@@ -150,31 +150,32 @@ export default function FortuneWheelPage() {
         <div className="grid gap-6 p-3 sm:p-6 lg:grid-cols-[minmax(0,1fr)_330px] lg:p-8">
           <div className="rounded-[32px] border border-white/10 bg-[#090b10] p-3 shadow-[0_25px_90px_rgba(0,0,0,.6)] sm:p-6">
             <div className="mb-4 flex items-center justify-between px-1"><div><div className="text-[8px] font-black uppercase tracking-[.25em] text-slate-600">Главный призовой механизм</div><div className="mt-1 text-sm font-black">Крути и забирай бонус</div></div><div className="rounded-full border border-emerald-300/10 bg-emerald-400/5 px-2.5 py-1 text-[8px] font-black uppercase tracking-wider text-emerald-300">SERVER ROLL</div></div>
-            <div className="relative mx-auto aspect-square w-full max-w-[720px]">
-              <div className="absolute inset-0 rounded-full bg-violet-600/10 blur-3xl" />
-              <div className="absolute inset-[1%] rounded-full border border-white/[.04] bg-[#05070a] shadow-[0_0_100px_rgba(0,0,0,.95)]" />
-              <div className="absolute inset-[4%] rounded-full border-[12px] border-[#161a22] shadow-[0_0_0_2px_rgba(255,255,255,.04),0_25px_70px_rgba(0,0,0,.9),inset_0_0_45px_rgba(0,0,0,.95)] sm:border-[18px]" />
-              <div className="absolute inset-[7%] rounded-full border border-white/10 bg-[#090c12] p-2 shadow-[inset_0_0_60px_rgba(0,0,0,.95)]">
-                <div className="relative h-full w-full overflow-hidden rounded-full" style={{ transform: `rotate(${rotation}deg)`, transition: "transform 5s cubic-bezier(.08,.72,.12,1)", background }}>
-                  <div className="absolute inset-[4%] rounded-full border border-white/[.07] shadow-[inset_0_0_45px_rgba(0,0,0,.8)]" />
-                  {wheel.map((item, i) => <DrumCell key={item.type} item={item} index={i} angle={angle} selected={selected === i} letter={resultLetter} />)}
-                  <div className="absolute inset-[28%] rounded-full border-[9px] border-[#171b23] bg-[#06080c] shadow-[inset_0_0_50px_rgba(0,0,0,.95),0_0_0_2px_rgba(255,255,255,.04)] sm:border-[13px]" />
-                  <div className="absolute inset-[33%] rounded-full border border-white/10 bg-[radial-gradient(circle_at_45%_35%,#171b24,#07090d_68%)] shadow-[inset_0_0_35px_rgba(0,0,0,.95)] />
-                </div>
+            <div className="relative mx-auto aspect-square w-full max-w-[680px] overflow-hidden rounded-full border border-white/10 bg-[#050609] p-3 shadow-[0_0_80px_rgba(0,0,0,.75)] sm:p-5">
+              <div className="absolute inset-0 rounded-full" style={{ background }} />
+              <div className="absolute inset-[3%] rounded-full border border-white/10" />
+              <div className="absolute inset-[8%] rounded-full border border-orange-300/10" />
+              <div className="absolute inset-[50%] z-20 h-[17%] w-[17%] -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-orange-300/40 bg-[#0b0d12] shadow-[0_0_40px_rgba(251,146,60,.25),inset_0_0_25px_rgba(0,0,0,.9)]" />
+              <div className="absolute inset-[50%] z-30 h-[6%] w-[6%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-300 shadow-[0_0_25px_rgba(251,146,60,.9)]" />
+              <div className="absolute left-1/2 top-[-1%] z-40 h-0 w-0 -translate-x-1/2 border-l-[13px] border-r-[13px] border-t-[28px] border-l-transparent border-r-transparent border-t-orange-300 drop-shadow-[0_0_12px_rgba(251,146,60,.8)]" />
+              <div className="absolute inset-[6%] transition-transform duration-[5s] ease-[cubic-bezier(.08,.72,.12,1)]" style={{ transform: `rotate(${rotation}deg)` }}>
+                {wheel.map((item, i) => <DrumCell key={`${item.type}-${i}`} item={item} index={i} angle={angle} selected={selected === i} letter={selected === i ? resultLetter : undefined} />)}
               </div>
-              <div className="absolute left-1/2 top-[1.2%] z-[70] -translate-x-1/2"><div className="h-0 w-0 border-l-[18px] border-r-[18px] border-t-[30px] border-l-transparent border-r-transparent border-t-orange-300 drop-shadow-[0_0_18px_rgba(251,146,60,.85)] sm:border-l-[22px] sm:border-r-[22px] sm:border-t-[36px]" /></div>
-              <div className="absolute left-1/2 top-1/2 z-[80] -translate-x-1/2 -translate-y-1/2">
-                <button type="button" onClick={spin} disabled={spinning || innerSpinning} className="group relative flex h-28 w-28 flex-col items-center justify-center rounded-full border border-orange-200/40 bg-[#10131a] shadow-[0_0_0_7px_rgba(0,0,0,.72),0_0_55px_rgba(251,146,60,.2),inset_0_0_40px_rgba(0,0,0,.95)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-70 sm:h-36 sm:w-36"><span className="absolute inset-2 rounded-full border border-orange-300/10" /><span className="text-[9px] font-black uppercase tracking-[.25em] text-orange-200">{spinning ? "Крутится" : innerSpinning ? "Дроп" : "Крутить"}</span><span className="mt-1 text-[8px] text-slate-500">{innerSpinning ? "финальная рулетка" : "барабан бонусов"}</span></button>
-              </div>
+              <button type="button" onClick={spin} disabled={spinning || innerSpinning} className="absolute inset-[42%] z-50 rounded-full border-2 border-orange-300/50 bg-[#0b0d12] text-[9px] font-black uppercase tracking-[.15em] text-orange-100 shadow-[0_0_35px_rgba(251,146,60,.25)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50">{spinning ? "Крутим" : innerSpinning ? "Дроп" : "Крутить"}</button>
               {result?.innerRoulette && <InnerRoulette data={result.innerRoulette} spinning={innerSpinning} />}
             </div>
-            {error && <div className="mt-4 rounded-2xl border border-red-300/10 bg-red-400/5 px-4 py-3 text-center text-xs text-red-300">{error}</div>}
-            {result && !innerSpinning && <div className="mt-5 rounded-2xl border border-orange-300/15 bg-orange-400/5 px-4 py-4 text-center"><div className="text-[8px] font-black uppercase tracking-[.25em] text-orange-300">Вам выпал бонус</div><div className="mt-1 text-lg font-black">{result.label}</div>{result.rewardValue !== null && <div className="mt-1 text-sm font-bold text-orange-200">{result.rewardValue}</div>}</div>}
           </div>
 
-          <aside className="space-y-4">
-            <div className="rounded-[28px] border border-white/10 bg-[#0a0c11] p-5"><div className="text-[9px] font-black uppercase tracking-[.25em] text-orange-300">Супербонус</div><h2 className="mt-2 text-xl font-black">Собери ZEONGG</h2><p className="mt-2 text-xs leading-5 text-slate-500">Из барабана выпадает только одна недостающая буква за раз.</p><div className="mt-4 flex gap-2">{letterIds.map((id) => <Letter key={id} id={id} collected={letterState.collected.includes(id)} />)}</div>{letterState.completed && <div className="mt-3 rounded-xl border border-orange-300/15 bg-orange-400/5 px-3 py-2 text-[9px] font-bold text-orange-200">Слово собрано — награда уже выдана.</div>}</div>
-            <div className="rounded-[28px] border border-white/10 bg-[#0a0c11] p-5"><div className="text-[9px] font-black uppercase tracking-[.25em] text-slate-500">Бонусы барабана</div><div className="mt-3 space-y-2">{wheel.map((item) => <div key={item.type} className="rounded-xl border border-white/5 bg-white/[.02] p-3"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-lg bg-orange-400/10 text-[9px] font-black text-orange-200">{item.icon}</span><div className="min-w-0"><div className="text-[10px] font-black">{item.label}</div><div className="mt-0.5 text-[8px] leading-3 text-slate-600">{descriptions[item.type]}</div></div></div></div>)}</div></div>
+          <aside className="rounded-[32px] border border-white/10 bg-[#090b10] p-5">
+            <div className="text-[8px] font-black uppercase tracking-[.25em] text-slate-600">Бонусы</div>
+            <h2 className="mt-2 text-xl font-black">Что может выпасть</h2>
+            <div className="mt-4 space-y-2">
+              {wheel.map((item) => <div key={item.type} className="rounded-2xl border border-white/5 bg-white/[.02] p-3"><div className="text-[10px] font-black uppercase text-white">{item.label}</div><div className="mt-1 text-[9px] leading-4 text-slate-500">{descriptions[item.type] || "Бонус барабана."}</div></div>)}
+            </div>
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <div className="text-[8px] font-black uppercase tracking-[.2em] text-slate-600">ZEONGG letters</div>
+              <div className="mt-3 flex flex-wrap gap-2">{letterIds.map((id) => <Letter key={id} id={id} collected={letterState.collected.includes(id)} />)}</div>
+            </div>
+            {error && <div className="mt-4 rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-xs text-red-200">{error}</div>}
           </aside>
         </div>
       </div>
