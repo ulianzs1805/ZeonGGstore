@@ -85,10 +85,10 @@ export async function POST(request: Request) {
     });
   } else if (reward.type === "DEPOSIT_BONUS") {
     const selected = weightedPick(depositRewards.map((item) => ({ item, weight: item.weight })));
-    innerRoulette = { items: depositRewards.map((item) => ({ key: String(item.amount), title: `+${item.amount}%`, subtitle: "к пополнению", image: "/bonuses/cashback.png" })), selectedIndex: depositRewards.findIndex((item) => item.amount === selected.amount), title: "Бонус на депозит" };
+    innerRoulette = { items: depositRewards.map((item) => ({ key: String(item.amount), title: `+${item.amount}%`, subtitle: "к пополнению", image: "/bonuses/cashback.svg" })), selectedIndex: depositRewards.findIndex((item) => item.amount === selected.amount), title: "Бонус на депозит" };
     rewardValue = selected.amount;
     label = `Депозитный бонус: +${selected.amount}%`;
-    metadata = { bonusType: reward.type, percent: selected.amount, onDeposit: true, chanceWeight: selected.weight, image: "/bonuses/cashback.png" };
+    metadata = { bonusType: reward.type, percent: selected.amount, onDeposit: true, chanceWeight: selected.weight, image: "/bonuses/cashback.svg" };
   } else if (reward.type === "FREE_CASE") {
     if (!cases.length) return NextResponse.json({ error: "Сейчас нет доступных кейсов." }, { status: 409 });
     const selected = weightedPick(cases.map((item) => ({ item, weight: 1 / Math.max(1, item.price) })));
