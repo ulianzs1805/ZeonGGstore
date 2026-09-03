@@ -1,0 +1,1 @@
+Temporary trigger for the bonus wheel winner-highlight fix.
