@@ -9,7 +9,7 @@ type WheelItem = { type: string; label: string; icon: string; weight: number };
 type LetterState = { collected: string[]; completed: boolean };
 type InnerItem = { key: string; title: string; subtitle?: string; image?: string; icon?: string };
 type InnerRouletteData = { items: InnerItem[]; selectedIndex: number; title: string };
-type Result = { rewardType: string; rewardValue: number | null; caseId: string | null; label: string; sectorIndex: number; metadata?: { letter?: string; slotId?: string; [key: string]: unknown }; innerRoulette?: InnerRouletteData | null; letterState?: LetterState };
+type Result = { rewardType: string; rewardValue: number | null; caseId: string | null; label: string; sectorIndex: number; metadata?: { letter?: string; slotId?: string; promoCode?: string; percent?: number; [key: string]: unknown }; innerRoulette?: InnerRouletteData | null; letterState?: LetterState };
 
 const letterImages: Record<string, string> = { Z: "/bonuses/letter_Z.png", E: "/bonuses/letter_E.png", O: "/bonuses/letter_O.png", N: "/bonuses/letter_N.png", G1: "/bonuses/letter_G1.png", G2: "/bonuses/letter_G2.png" };
 const bonusImages: Record<string, string> = { FREE_CASE: "/bonuses/IMG_9358.jpeg", ZCOIN_RAIN: "/bonuses/IMG_9359.jpeg", Z_BOOST: "/bonuses/IMG_9360.jpeg", LUCKY_DROP: "/bonuses/IMG_9361.jpeg", SAFE_OPEN: "/bonuses/IMG_9363.jpeg", DEPOSIT_BONUS: "/bonuses/IMG_9364.jpeg", DOUBLE_DROP: "/bonuses/IMG_9365.jpeg" };
@@ -71,6 +71,13 @@ function DrumCell({ item, index, angle, selected, letter }: { item: WheelItem; i
 function RewardModal({ result, wheel, letter, onClose }: { result: Result; wheel: WheelItem[]; letter?: string; onClose: () => void }) {
   const item = wheel[result.sectorIndex] ?? wheel.find((entry) => entry.type === result.rewardType);
   const title = result.rewardType === "DEPOSIT_BONUS" && result.rewardValue != null ? `+${result.rewardValue}% к пополнению` : result.label || item?.label || "Бонус";
+  const promoCode = result.rewardType === "DEPOSIT_BONUS" ? result.metadata?.promoCode : undefined;
+  const promoPercent = result.metadata?.percent ?? result.rewardValue;
+  const savePromo = async () => {
+    if (!promoCode) return;
+    try { const response = await fetch("/api/promos/inventory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: promoCode }) }); if (!response.ok) throw new Error("Не удалось сохранить промокод"); onClose(); } catch { window.alert("Не удалось добавить промокод в инвентарь. Попробуй ещё раз."); }
+  };
+  const usePromo = () => { if (promoCode) window.location.href = `/bonuses/promocodes?code=${encodeURIComponent(promoCode)}`; };
   return <div className="absolute inset-0 z-[120] grid place-items-center bg-black/60 p-4 backdrop-blur-[4px]">
     <div className="w-full max-w-[390px] overflow-hidden rounded-[30px] border border-orange-300/30 bg-[radial-gradient(circle_at_50%_0%,rgba(251,146,60,.17),transparent_52%),#080a0f] p-5 text-center shadow-[0_35px_120px_rgba(0,0,0,.9),0_0_55px_rgba(251,146,60,.12)] sm:p-7">
       <div className="mx-auto inline-flex rounded-full border border-orange-300/20 bg-orange-400/5 px-3 py-1 text-[8px] font-black uppercase tracking-[.25em] text-orange-200">Бонус получен</div>
@@ -78,7 +85,8 @@ function RewardModal({ result, wheel, letter, onClose }: { result: Result; wheel
       <div className="mt-5 text-[10px] font-black uppercase tracking-[.2em] text-slate-500">Вам выпало</div>
       <h3 className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">{title}</h3>
       <p className="mx-auto mt-2 max-w-[300px] text-xs leading-5 text-slate-400">{descriptions[result.rewardType] || "Бонус успешно получен."}</p>
-      <div className="mt-5 rounded-2xl border border-orange-300/15 bg-orange-400/5 px-4 py-3 text-[10px] font-bold text-orange-200">Награда добавлена в ваш профиль</div>
+      {promoCode && <div className="mt-5 rounded-2xl border border-orange-300/25 bg-black/25 p-4"><div className="text-[9px] font-black uppercase tracking-[.2em] text-orange-200">Ваш промокод</div><div className="mt-2 font-mono text-2xl font-black tracking-[.22em] text-white">{promoCode}</div><div className="mt-2 text-[10px] font-bold text-slate-400">На депозит: <span className="text-orange-200">+{promoPercent}%</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" onClick={usePromo} className="rounded-xl bg-orange-400 px-3 py-3 text-[10px] font-black uppercase tracking-[.12em] text-black transition hover:bg-orange-300">Использовать</button><button type="button" onClick={() => void savePromo()} className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-3 text-[10px] font-black uppercase tracking-[.12em] text-white transition hover:bg-white/[.08]">Добавить в инвентарь</button></div></div>}
+      {!promoCode && <div className="mt-5 rounded-2xl border border-orange-300/15 bg-orange-400/5 px-4 py-3 text-[10px] font-bold text-orange-200">Награда добавлена в ваш профиль</div>}
       <button type="button" onClick={onClose} className="mt-4 w-full rounded-2xl border border-white/10 bg-white/[.04] py-3 text-[10px] font-black uppercase tracking-[.18em] text-white transition hover:bg-white/[.08]">Продолжить</button>
     </div>
   </div>;
