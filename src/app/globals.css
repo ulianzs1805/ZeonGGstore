@@ -115,9 +115,9 @@ img[src^="/bonuses/letter_"] {
   object-position: center !important;
 }
 
-/* The small bonus/free-case roulette now uses the same fast-start, long-brake curve as the case reel. */
+/* Inner bonus roulette: keep the same fast launch + long braking profile as the case reel. */
 main [class*="inset-x-[4%]"] .flex.w-max.gap-2,
 main [class*="inset-x-[7%]"] .flex.w-max.gap-2 {
-  transition: transform 4300ms cubic-bezier(0.12, 0.78, 0.16, 1) !important;
+  transition: transform 4800ms cubic-bezier(0.08, 0.88, 0.12, 1) !important;
   will-change: transform;
 }
