@@ -69,7 +69,7 @@ function DrumCell({ item, index, angle, selected, letter }: { item: WheelItem; i
 }
 
 function RewardModal({ result, wheel, letter, onClose }: { result: Result; wheel: WheelItem[]; letter?: string; onClose: () => void }) {
-  const item = wheel[result.sectorIndex] ?? wheel.find((entry) => entry.type === result.rewardType);
+  const item = wheel.find((entry) => entry.type === result.rewardType);
   const title = result.rewardType === "DEPOSIT_BONUS" && result.rewardValue != null ? `+${result.rewardValue}% к пополнению` : result.label || item?.label || "Бонус";
   const promoCode = result.rewardType === "DEPOSIT_BONUS" ? result.metadata?.promoCode : undefined;
   const promoPercent = result.metadata?.percent ?? result.rewardValue;
@@ -106,7 +106,7 @@ export default function FortuneWheelPage() {
 
   useEffect(() => { fetch("/api/bonuses/fortune", { cache: "no-store" }).then(async (response) => { if (!response.ok) return; const data = await response.json(); if (Array.isArray(data.wheel)) setWheel(data.wheel); if (data.letterState) setLetterState(data.letterState); }).catch(() => undefined); return () => timers.current.forEach((id) => window.clearTimeout(id)); }, []);
   const angle = 360 / Math.max(wheel.length, 1);
-  const background = useMemo(() => `conic-gradient(from -22.5deg, ${wheel.map((_, i) => `${i % 2 ? "#151922" : "#202633"} ${i * angle}deg ${(i + 1) * angle}deg`).join(",")})`, [wheel, angle]);
+  const background = useMemo(() => `conic-gradient(from 0deg, ${wheel.map((_, i) => `${i % 2 ? "#151922" : "#202633"} ${i * angle}deg ${(i + 1) * angle}deg`).join(",")})`, [wheel, angle]);
 
   async function spin() {
     if (spinning || innerSpinning || showReward || !wheel.length) return;
