@@ -6,13 +6,14 @@ import AdminSupportPanel from "./AdminSupportPanel";
 import DashboardPanel from "./DashboardPanel";
 import DevConsolePanel from "./DevConsolePanel";
 import ForceDropPanel from "./ForceDropPanel";
+import FortuneBypassPanel from "./FortuneBypassPanel";
 import RoleManagementPanel from "./RoleManagementPanel";
 import SkinPricePanel from "./SkinPricePanel";
 import UsersPanel from "./UsersPanel";
 import ZCoinPanel from "./ZCoinPanel";
 
 type Role = "ADMIN" | "DEV" | "NPN1_DEV" | "TESTER";
-type Section = "dashboard" | "users" | "roles" | "support" | "zcoin" | "console" | "force" | "skinPrices";
+type Section = "dashboard" | "users" | "roles" | "support" | "zcoin" | "console" | "force" | "skinPrices" | "fortune";
 
 export default function AdminPanel({ role, email, staffId }: { role: Role; email: string; staffId: string | null }) {
   const [section, setSection] = useState<Section>("dashboard");
@@ -27,6 +28,7 @@ export default function AdminPanel({ role, email, staffId }: { role: Role; email
     { id: "console", label: "Dev Console", visible: isDev },
     { id: "force", label: "Force Drop", visible: isNpn },
     { id: "skinPrices", label: "Стоимость скинов", visible: isDev },
+    { id: "fortune", label: "Барабан", visible: isDev },
   ];
   const renderSection = () => {
     if (section === "dashboard") return <DashboardPanel role={role} email={email} staffId={staffId} />;
@@ -37,6 +39,7 @@ export default function AdminPanel({ role, email, staffId }: { role: Role; email
     if (section === "console") return isDev ? <DevConsolePanel /> : null;
     if (section === "force") return isNpn ? <ForceDropPanel /> : null;
     if (section === "skinPrices") return isDev ? <SkinPricePanel role={role} /> : null;
+    if (section === "fortune") return isDev ? <FortuneBypassPanel /> : null;
     return null;
   };
   return <div className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
