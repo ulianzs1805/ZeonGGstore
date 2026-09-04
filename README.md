@@ -21,4 +21,4 @@ ZeonGGStore — веб-проект с кейсами, Апгрейдером, �
 Beta:
 На этапе Beta доступ к проекту ограничен.
 
-<!-- Vercel deployment trigger: 2026-09-03 -->
+<!-- Vercel deployment trigger: 2026-09-04 16:18 -->
