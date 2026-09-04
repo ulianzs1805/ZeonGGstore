@@ -25,7 +25,7 @@ const faq = [
   ["Можно ли передавать свой промокод другому человеку?", "Зависит от типа промокода. Если код персональный и привязан к вашему аккаунту, другой пользователь не сможет или не должен его активировать. Условия конкретного кода имеют приоритет."],
   ["Почему цены предметов могут отличаться от рынка?", "ZeonGGStore находится в beta, поэтому отображаемые цены являются частью внутренней экономики платформы и могут обновляться администрацией. Цена в интерфейсе конкретной функции является актуальной для этой операции."],
   ["Есть ли вывод предметов во внешний аккаунт?", "Доступность внешней передачи зависит от конкретной функции и текущей версии beta. Если функция передачи недоступна в интерфейсе, результат считается внутренним результатом платформы."],
-  ["Как связаться с поддержкой?", "Используйте раздел поддержки в личном кабинете. Если для конкретного вопроса на сайте будет указан дополнительный официальный канал связи, его можно использовать вместо него."],
+  ["Как связаться с поддержкой?", "Используйте раздел поддержки в личном кабинете или напишите на zeonggstore@gmail.com."],
 ];
 
 export default function SiteFooter() {
@@ -67,9 +67,7 @@ export default function SiteFooter() {
               <Link href="/agreement" className="transition hover:text-white">Пользовательское соглашение</Link>
               <Link href="/agreement#refund" className="transition hover:text-white">Правила возврата</Link>
               <Link href="/account/support" className="transition hover:text-white">Поддержка</Link>
-              <span className="pt-2 text-xs leading-5 text-slate-500">
-                Почта для связи будет добавлена после получения адреса.
-              </span>
+              <a href="mailto:zeonggstore@gmail.com" className="transition hover:text-white">zeonggstore@gmail.com</a>
             </nav>
           </div>
 
@@ -97,7 +95,7 @@ export default function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-3 border-t border-white/[0.07] pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <span>Все игровые функции и внутренняя валюта ZeonGGStore предназначены для использования внутри платформы.</span>
-          <span>Почта поддержки: будет добавлена</span>
+          <a href="mailto:zeonggstore@gmail.com" className="transition hover:text-slate-300">zeonggstore@gmail.com</a>
         </div>
       </div>
     </footer>
