@@ -3,26 +3,26 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, writeAuditLog } from "@/lib/rbac";
 
 const CODE_RE = /^[A-Z0-9]{6,24}$/;
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const TYPE = "FORTUNE_BYPASS_CODE";
 
-function parse(label: string | null) {
-  try { return JSON.parse(label || "{}"); } catch { return {}; }
-}
+function parse(label: string | null) { try { return JSON.parse(label || "{}"); } catch { return {}; } }
+function generateCode() { return Array.from({ length: 8 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join(""); }
 
 export async function GET() {
   const access = await requireRole(["ADMIN", "DEV", "NPN1_DEV"]);
   if (!access.user) return access.response;
   const rows = await prisma.operation.findMany({ where: { type: TYPE }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, label: true, createdAt: true, status: true } });
-  const codes = rows.map((row) => ({ id: row.id, ...parse(row.label), createdAt: row.createdAt, status: row.status }));
-  return NextResponse.json({ codes });
+  return NextResponse.json({ codes: rows.map((row) => ({ id: row.id, ...parse(row.label), createdAt: row.createdAt, status: row.status })) });
 }
 
 export async function POST(request: Request) {
   const access = await requireRole(["ADMIN", "DEV", "NPN1_DEV"]);
   if (!access.user) return access.response;
   const body = await request.json().catch(() => null) as { code?: unknown; expiresHours?: unknown } | null;
-  const code = typeof body?.code === "string" ? body.code.trim().toUpperCase() : "";
+  let code = typeof body?.code === "string" ? body.code.trim().toUpperCase() : "";
   const expiresHours = typeof body?.expiresHours === "number" ? body.expiresHours : Number(body?.expiresHours);
+  if (!code) code = generateCode();
   if (!CODE_RE.test(code)) return NextResponse.json({ error: "Код: от 6 до 24 символов, только A-Z и 0-9." }, { status: 400 });
   if (!Number.isFinite(expiresHours) || expiresHours < 1 || expiresHours > 8760) return NextResponse.json({ error: "Срок действия: от 1 до 8760 часов." }, { status: 400 });
   const existing = await prisma.operation.findUnique({ where: { idempotencyKey: `fortune-bypass-code:${code}` }, select: { id: true } });
