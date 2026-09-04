@@ -41,8 +41,9 @@ function InnerCell({ item }: { item: InnerItem }) {
 }
 
 function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: boolean }) {
-  const items = Array.from({ length: 9 }, () => data.items).flat();
-  const target = data.selectedIndex + data.items.length * 4;
+  // Longer track + aggressive ease-out: instant acceleration at the start, then a long cinematic brake.
+  const items = Array.from({ length: 12 }, () => data.items).flat();
+  const target = data.selectedIndex + data.items.length * 7;
   const card = 112;
   const [offset, setOffset] = useState(0);
   useEffect(() => { setOffset(0); if (!spinning) return; const frame = window.requestAnimationFrame(() => setOffset(target)); return () => window.cancelAnimationFrame(frame); }, [data.selectedIndex, data.items.length, target, spinning]);
@@ -51,7 +52,7 @@ function InnerRoulette({ data, spinning }: { data: InnerRouletteData; spinning: 
     <div className="relative overflow-hidden rounded-2xl border border-orange-300/15 bg-[#020409] py-3 shadow-[inset_0_0_35px_rgba(0,0,0,.9)]">
       <div className="pointer-events-none absolute inset-y-0 left-1/2 z-30 w-[3px] -translate-x-1/2 bg-orange-300 shadow-[0_0_22px_rgba(251,146,60,.95)]" />
       <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-1/4 bg-gradient-to-r from-[#020409] to-transparent" /><div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-1/4 bg-gradient-to-l from-[#020409] to-transparent" />
-      <div className="flex w-max gap-2" style={{ transform: `translateX(calc(50% - ${card / 2}px - ${offset * (card + 8)}px))`, transition: spinning ? "transform 4.3s cubic-bezier(.12,.78,.16,1)" : "transform .3s ease-out" }}>
+      <div className="flex w-max gap-2" style={{ transform: `translateX(calc(50% - ${card / 2}px - ${offset * (card + 8)}px))`, transition: spinning ? "transform 4.8s cubic-bezier(.08,.88,.12,1)" : "transform .3s ease-out", willChange: "transform" }}>
         {items.map((item, index) => <div key={`${item.key}-${index}`} className="flex h-[96px] w-[112px] shrink-0 flex-col items-center justify-center rounded-xl border border-white/10 bg-[#11151d] px-2 text-center"><InnerCell item={item} /><b className="mt-1 line-clamp-2 text-[9px] leading-3 text-white">{item.title}</b>{item.subtitle && <small className="mt-0.5 text-[7px] text-slate-500">{item.subtitle}</small>}</div>)}
       </div>
     </div>
@@ -155,7 +156,7 @@ export default function FortuneWheelPage() {
       setRotation((current) => current - 360 * 7 - (index + 0.5) * angle);
       const outer = window.setTimeout(() => {
         setSpinning(false); setResult(data); setRollingLetter(data.metadata?.letter); if (data.letterState) setLetterState(data.letterState); if (data.cooldown) { setCooldown(data.cooldown); setCooldownRemaining(data.cooldown.cooldownRemainingMs || COOLDOWN_MS); } else { const nextUntil = new Date(Date.now() + COOLDOWN_MS).toISOString(); setCooldown({ available: false, cooldownUntil: nextUntil, cooldownRemainingMs: COOLDOWN_MS }); setCooldownRemaining(COOLDOWN_MS); } window.dispatchEvent(new Event("zeon-profile-updated"));
-        if (data.innerRoulette && innerTypes.includes(data.rewardType)) { setInnerSpinning(true); const inner = window.setTimeout(() => { setInnerSpinning(false); setShowReward(true); }, 4400); timers.current.push(inner); } else setShowReward(true);
+        if (data.innerRoulette && innerTypes.includes(data.rewardType)) { setInnerSpinning(true); const inner = window.setTimeout(() => { setInnerSpinning(false); setShowReward(true); }, 4900); timers.current.push(inner); } else setShowReward(true);
       }, 7250);
       timers.current.push(outer);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Ошибка барабана"); setSpinning(false); setRollingLetter(undefined); void loadState(); }
