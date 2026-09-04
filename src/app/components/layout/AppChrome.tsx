@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import MobileBottomNav from "../mobile/MobileBottomNav";
+import SiteFooter from "./SiteFooter";
 
 function detectMobileDevice() {
   if (typeof window === "undefined") return false;
@@ -15,6 +16,7 @@ function detectMobileDevice() {
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isBetaGate = pathname === "/beta" || pathname.startsWith("/beta/");
+  const isAgreement = pathname === "/agreement";
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const pageClass = isBetaGate
+  const pageClass = isBetaGate || isAgreement
     ? "min-h-screen"
     : isMobileDevice
       ? "min-h-screen pb-24"
@@ -37,7 +39,8 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className={pageClass}>{children}</div>
-      {!isBetaGate && <MobileBottomNav />}
+      {!isBetaGate && !isAgreement && <SiteFooter />}
+      {!isBetaGate && !isAgreement && <MobileBottomNav />}
     </>
   );
 }
