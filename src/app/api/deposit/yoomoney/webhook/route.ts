@@ -16,6 +16,16 @@ function verifySign(values: Record<string, string>, secret: string, received: st
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+function readPromoId(label: string | null | undefined) {
+  if (!label) return null;
+  try {
+    const metadata = JSON.parse(label) as { promoId?: unknown };
+    return typeof metadata.promoId === "string" ? metadata.promoId : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const secret = process.env.YOOMONEY_HTTP_SECRET;
   if (!secret) return NextResponse.json({ error: "YuMoney webhook is not configured" }, { status: 503 });
@@ -48,67 +58,85 @@ export async function POST(request: Request) {
   }
 
   const expectedCredit = transaction.rubAmount ?? 0;
-
-  // ЮMoney's `amount` is the amount actually credited to the wallet, while
-  // `withdraw_amount` is the amount charged to the payer. Do not cancel a
-  // real payment just because the two values differ due to commission/rounding.
-  // A tiny tolerance also covers cent-level rounding by the payment provider.
   const receivedEnough = amountReceived + 0.02 >= expectedCredit;
   const paidEnough = Number.isFinite(withdrawn) && withdrawn + 0.02 >= expectedCredit;
 
   if (!receivedEnough && !paidEnough) {
-    // Keep the order pending so a legitimate retry notification can still
-    // complete it. Most importantly, never mark a paid order CANCELED here.
     return NextResponse.json({ ok: true, pending: true });
   }
 
   const operationKey = `deposit:${transaction.id}`;
 
-  await prisma.$transaction(async (tx) => {
-    const current = await tx.transaction.findUnique({
-      where: { id: transaction.id },
-      select: { status: true, userId: true, zCoinAmount: true },
-    });
-
-    if (!current || current.status === "SUCCESS") return;
-
-    const operation = await tx.operation.findUnique({
-      where: { idempotencyKey: operationKey },
-      select: { id: true },
-    });
-
-    const credit = current.zCoinAmount ?? 0;
-
-    await tx.user.update({
-      where: { id: current.userId },
-      data: { balance: { increment: credit } },
-    });
-
-    await tx.transaction.update({
-      where: { id: transaction.id },
-      data: {
-        status: "SUCCESS",
-        paymentId: values.operation_id || transaction.id,
-        zCoinAmount: credit,
-      },
-    });
-
-    if (operation) {
-      await tx.operation.update({
-        where: { id: operation.id },
-        data: { status: "SUCCESS", amount: credit },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.transaction.updateMany({
+        where: { id: transaction.id, status: "PENDING" },
+        data: { status: "PROCESSING" },
       });
-    }
 
-    await tx.notification.create({
-      data: {
-        userId: current.userId,
-        type: "DEPOSIT_SUCCESS",
-        title: "Пополнение зачислено",
-        body: `На баланс зачислено ${credit} Z-Coin.`,
-      },
+      if (claimed.count !== 1) return;
+
+      const operation = await tx.operation.findUnique({
+        where: { idempotencyKey: operationKey },
+        select: { id: true, label: true, status: true },
+      });
+
+      const credit = transaction.zCoinAmount ?? 0;
+      const promoId = readPromoId(operation?.label);
+
+      await tx.user.update({
+        where: { id: transaction.userId },
+        data: { balance: { increment: credit } },
+      });
+
+      if (promoId) {
+        const activation = await tx.promoActivation.findUnique({
+          where: { promoId_userId: { promoId, userId: transaction.userId } },
+          select: { id: true },
+        });
+
+        if (!activation) {
+          await tx.promoActivation.create({
+            data: { promoId, userId: transaction.userId },
+          });
+          await tx.promoCode.update({
+            where: { id: promoId },
+            data: { activationCount: { increment: 1 } },
+          });
+        }
+      }
+
+      await tx.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: "SUCCESS",
+          paymentId: values.operation_id || transaction.id,
+          zCoinAmount: credit,
+        },
+      });
+
+      if (operation) {
+        await tx.operation.update({
+          where: { id: operation.id },
+          data: { status: "SUCCESS", amount: credit },
+        });
+      }
+
+      await tx.notification.create({
+        data: {
+          userId: transaction.userId,
+          type: "DEPOSIT_SUCCESS",
+          title: "Пополнение зачислено",
+          body: `На баланс зачислено ${credit} Z-Coin.`,
+        },
+      });
     });
-  });
+  } catch (error) {
+    // If a duplicate notification races with the first one, the unique
+    // transaction state/idempotency rules make the second attempt harmless.
+    console.error("YooMoney deposit processing failed", error);
+    return NextResponse.json({ error: "Deposit processing failed" }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
