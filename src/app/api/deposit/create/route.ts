@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createYooKassaPayment } from "@/lib/yookassa";
 
 export const dynamic = "force-dynamic";
-const MIN_RUB = 1;
+const MIN_RUB = 2;
 const MAX_RUB = 40000;
 const METHODS = ["sbp", "bank_card", "tinkoff_bank", "sberbank", "yoomoney"] as const;
 type PaymentMethod = typeof METHODS[number];
