@@ -13,7 +13,11 @@ export async function POST(request: Request) {
     const transaction = await prisma.transaction.findFirst({ where: { paymentId }, select: { id: true, userId: true, rubAmount: true, zCoinAmount: true, status: true } });
     if (!transaction) return NextResponse.json({ ok: true });
     const paidRub = Number(payment.amount?.value ?? 0);
-    if (transaction.rubAmount !== Math.round(paidRub)) { await prisma.transaction.update({ where: { id: transaction.id }, data: { status: "CANCELED" } }).catch(() => undefined); return NextResponse.json({ error: "Payment amount mismatch" }, { status: 400 }); }
+    const expectedRub = transaction.rubAmount;
+    if (expectedRub == null || expectedRub !== Math.round(paidRub)) {
+      await prisma.transaction.update({ where: { id: transaction.id }, data: { status: "CANCELED" } }).catch(() => undefined);
+      return NextResponse.json({ error: "Payment amount mismatch" }, { status: 400 });
+    }
     if (payment.status === "succeeded" && payment.paid) {
       if (transaction.status === "SUCCESS") return NextResponse.json({ ok: true, alreadyProcessed: true });
       const operationKey = `deposit:${transaction.id}`;
