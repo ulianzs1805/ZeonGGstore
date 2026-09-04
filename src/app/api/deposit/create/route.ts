@@ -43,8 +43,8 @@ export async function POST(request: Request) {
     if (!payment.confirmation?.confirmation_url || !payment.id) throw new Error("YOO_PAYMENT_URL_MISSING");
     const metadata = JSON.stringify({ amountRub: amount, bonusAmount, totalCredit, promoId: promo?.id ?? null, promoCode: promo?.code ?? null, promoPercent: promo?.depositPercent ?? 0, paymentMethod, idempotencyKey });
     await prisma.$transaction([
-      prisma.transaction.update({ where: { id: transaction.id }, data: { paymentId: payment.id, status: payment.status === "succeeded" ? "SUCCESS" : "PENDING" } }),
-      prisma.operation.create({ data: { userId: user.id, type: "DEPOSIT_PAYMENT", label: metadata, amount: totalCredit, status: payment.status === "succeeded" ? "SUCCESS" : "PENDING", idempotencyKey: `deposit:${transaction.id}` } }),
+      prisma.transaction.update({ where: { id: transaction.id }, data: { paymentId: payment.id, status: "PENDING" } }),
+      prisma.operation.create({ data: { userId: user.id, type: "DEPOSIT_PAYMENT", label: metadata, amount: totalCredit, status: "PENDING", idempotencyKey: `deposit:${transaction.id}` } }),
     ]);
     return NextResponse.json({ ok: true, transactionId: transaction.id, paymentId: payment.id, confirmationUrl: payment.confirmation.confirmation_url, amount, bonusAmount, totalCredit });
   } catch (error) {
