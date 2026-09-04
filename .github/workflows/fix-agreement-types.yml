@@ -1,0 +1,47 @@
+name: Fix agreement section types
+
+on:
+  push:
+    branches:
+      - terminal
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: terminal
+          fetch-depth: 0
+
+      - name: Fix agreement types
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/app/agreement/page.tsx")
+          text = path.read_text(encoding="utf-8")
+
+          old = "const sections = ["
+          new = "const sections: Array<[string, string[]]> = ["
+
+          if old in text and new not in text:
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          else:
+              print("Agreement section typing already fixed or pattern not found.")
+
+      - name: Commit fix
+        run: |
+          if git diff --quiet -- src/app/agreement/page.tsx; then
+            echo "No changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/agreement/page.tsx
+          git commit -m "fix: resolve agreement section key type"
+          git push origin HEAD:terminal
