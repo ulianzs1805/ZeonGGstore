@@ -23,7 +23,7 @@ export async function POST(request: Request) {
         const operation = await tx.operation.findUnique({ where: { idempotencyKey: operationKey }, select: { id: true, label: true } });
         let metadata: { promoId?: string | null; bonusAmount?: number } = {};
         try { metadata = JSON.parse(operation?.label || "{}"); } catch {}
-        let credit = current.zCoinAmount;
+        let credit = current.zCoinAmount ?? 0;
         if (metadata.promoId) {
           const promo = await tx.promoCode.findUnique({ where: { id: metadata.promoId }, select: { id: true, maxActivations: true, activationCount: true, expiresAt: true } });
           let promoApplied = false;
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
               else await tx.promoActivation.delete({ where: { promoId_userId: { promoId: promo.id, userId: current.userId } } }).catch(() => undefined);
             } catch {}
           }
-          if (!promoApplied) credit = current.rubAmount;
+          if (!promoApplied) credit = current.rubAmount ?? 0;
         }
         await tx.user.update({ where: { id: current.userId }, data: { balance: { increment: credit } } });
         await tx.transaction.update({ where: { id: transaction.id }, data: { status: "SUCCESS", zCoinAmount: credit } });
