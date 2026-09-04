@@ -139,7 +139,7 @@ export default function AgreementPage() {
 
         <div className="mt-8 space-y-8">
           {sections.map(([title, paragraphs]) => (
-            <section key={title}>
+            <section key={typeof title === "string" ? title : title.join("-")}>
               <h2 className="text-xl font-extrabold tracking-tight">{title}</h2>
               <div className="mt-3 space-y-3 text-[15px] leading-7 text-slate-700">
                 {paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
