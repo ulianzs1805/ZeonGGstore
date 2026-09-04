@@ -5,6 +5,6 @@ export type Ticket = { id: string; subject: string; description: string; status:
 export type AccountUser = { id?: string; name: string | null; email: string; avatar?: string | null; balance?: number; createdAt: string; role: "USER" | "ADMIN" | "DEV" | "NPN1_DEV" };
 export type ProfileData = { user: AccountUser; inventory: InventoryItem[]; operations: Operation[]; transactions: Transaction[]; tickets: Ticket[] };
 export type Statistics = { inventoryCount: number; inventoryValue: number; openedCases: number; soldItems: number; spent: number; earned: number };
-export type AccountSection = "inventory" | "transactions" | "statistics" | "settings" | "support";
+export type AccountSection = "inventory" | "promocodes" | "transactions" | "statistics" | "settings" | "support";
 export function number(value: number) { return new Intl.NumberFormat("ru-RU").format(value); }
 export function date(value: string) { return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)); }
