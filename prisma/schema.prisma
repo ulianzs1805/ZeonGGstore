@@ -31,6 +31,7 @@ model User {
   zcoinActions ZCoinOperation[] @relation("ZCoinActor")
   zcoinOperations ZCoinOperation[] @relation("ZCoinTarget")
   createdPromoCodes PromoCode[] @relation("PromoCreator")
+  ownedPromoCodes PromoCode[] @relation("PromoOwner")
   promoActivations PromoActivation[]
   freeCaseGrants FreeCaseGrant[]
   towerGames TowerGame[]
@@ -41,16 +42,21 @@ model PromoCode {
   code String @unique
   type PromoType
   zCoinAmount Int?
+  depositPercent Int?
   caseId String?
+  ownerId String?
+  inventorySaved Boolean @default(false)
   maxActivations Int
   activationCount Int @default(0)
   expiresAt DateTime
   createdById String
   createdAt DateTime @default(now())
   creator User @relation("PromoCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  owner User? @relation("PromoOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   case Case? @relation(fields: [caseId], references: [id], onDelete: Cascade)
   activations PromoActivation[]
   @@index([createdById, createdAt])
+  @@index([ownerId, inventorySaved, createdAt])
   @@index([expiresAt])
 }
 
@@ -314,4 +320,5 @@ enum ProbabilityMode {
 enum PromoType {
   ZCOIN
   CASE
+  DEPOSIT
 }
