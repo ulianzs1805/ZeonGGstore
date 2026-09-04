@@ -14,7 +14,13 @@ export async function GET() {
   const created = user.role === "NPN1_DEV" ? [] : await prisma.promoCode.findMany({ where: { createdById: user.id, createdAt: { gte: since } }, select: { type: true } });
   const limit = user.role === "NPN1_DEV" ? null : LIMITS[user.role as "ADMIN" | "DEV"];
   const usage = { total: created.length, CASE: created.filter((item) => item.type === "CASE").length, ZCOIN: created.filter((item) => item.type === "ZCOIN").length, DEPOSIT: created.filter((item) => item.type === "DEPOSIT").length };
-  return NextResponse.json({ cases, limit, usage, windowHours: 5 });
+  const promos = await prisma.promoCode.findMany({
+    where: { createdById: user.id },
+    select: { id: true, code: true, type: true, zCoinAmount: true, depositPercent: true, caseId: true, expiresAt: true, activationCount: true, maxActivations: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+  return NextResponse.json({ cases, limit, usage, windowHours: 5, promos });
 }
 export async function POST(request: Request) {
   const user = await getCurrentUser();
