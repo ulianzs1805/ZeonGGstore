@@ -1,10 +1,8 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-
 type NavItem = { label: string; href?: string; icon: React.ReactNode };
 const iconClass = "h-5 w-5 sm:h-6 sm:w-6";
 function IconCases() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={iconClass}><rect x="4" y="5" width="16" height="14" rx="3" /><path d="M8 5V3m8 2V3M8 12h.01M12 12h.01M16 12h.01M9.5 15.5h5" strokeLinecap="round" /></svg>; }
@@ -15,7 +13,6 @@ function IconMenu() { return <svg viewBox="0 0 24 24" fill="none" stroke="curren
 function IconPlus() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>; }
 function itemClass(active: boolean) { return `flex min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl px-1 py-2 text-[9px] font-black uppercase tracking-[0.08em] transition ${active ? "bg-violet-400/10 text-violet-100" : "text-slate-500 active:bg-white/[0.05] active:text-white"}`; }
 function detectMobileDevice() { if (typeof window === "undefined") return false; const viewportMobile = window.matchMedia("(max-width: 767px)").matches; const touchDevice = navigator.maxTouchPoints > 0; const compactTouchDevice = touchDevice && Math.min(window.innerWidth, window.screen.width) <= 1024; return viewportMobile || compactTouchDevice; }
-
 export default function MobileBottomNav() {
   const pathname = usePathname(); const { data: session } = useSession(); const [balance, setBalance] = useState<number | null>(null); const [isMobileDevice, setIsMobileDevice] = useState(false); const [menuOpen, setMenuOpen] = useState(false); const [bonusOpen, setBonusOpen] = useState(false);
   useEffect(() => { const updateDevice = () => setIsMobileDevice(detectMobileDevice()); updateDevice(); window.addEventListener("resize", updateDevice); window.addEventListener("orientationchange", updateDevice); return () => { window.removeEventListener("resize", updateDevice); window.removeEventListener("orientationchange", updateDevice); }; }, []);
@@ -29,7 +26,7 @@ export default function MobileBottomNav() {
     <nav className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[80] mx-auto flex h-[72px] max-w-[720px] items-center rounded-[28px] border border-white/10 bg-[#11131c]/95 p-1.5 shadow-[0_-8px_40px_rgba(0,0,0,0.38)] backdrop-blur-2xl" aria-label="Мобильная навигация">
       <Link href={items[0].href!} className={itemClass(pathname === "/" || pathname.startsWith("/case"))}>{items[0].icon}<span>{items[0].label}</span></Link>
       <Link href={items[1].href!} className={itemClass(pathname === "/games" || pathname.startsWith("/games/"))}>{items[1].icon}<span>{items[1].label}</span></Link>
-      <Link href="/account" className="relative -mt-7 flex min-w-[78px] flex-1 flex-col items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-emerald-200"><span className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-emerald-200/30 bg-gradient-to-b from-emerald-300 to-emerald-500 text-[#06241f] shadow-[0_0_28px_rgba(74,222,128,0.28)]"><IconPlus /></span><span>{balance === null ? "Z" : `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(balance)} Z`}</span></Link>
+      <Link href="/deposit" className={`relative -mt-7 flex min-w-[78px] flex-1 flex-col items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.08em] ${pathname.startsWith("/deposit") ? "text-violet-200" : "text-emerald-200"}`}><span className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-emerald-200/30 bg-gradient-to-b from-emerald-300 to-emerald-500 text-[#06241f] shadow-[0_0_28px_rgba(74,222,128,0.28)]"><IconPlus /></span><span>{balance === null ? "Z" : `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(balance)} Z`}</span></Link>
       <button type="button" onClick={() => { setBonusOpen(v => !v); setMenuOpen(false); }} className={itemClass(bonusOpen || pathname.startsWith("/bonuses"))} aria-label="Открыть бонусы">{items[2].icon}<span>Бонусы</span></button>
       <Link href={items[3].href!} className={itemClass(pathname.startsWith("/account/inventory"))}>{items[3].icon}<span>{items[3].label}</span></Link>
       <button type="button" onClick={() => { setMenuOpen(true); setBonusOpen(false); }} className={itemClass(menuOpen)} aria-label="Открыть мобильное меню"><IconMenu /><span>Меню</span></button>
