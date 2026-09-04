@@ -22,10 +22,7 @@ const depositRewards = [5, 10, 15, 20, 25, 30, 35].map((percent) => ({ amount: p
 const weightedPick = <T,>(items: Array<{ item: T; weight: number }>) => {
   const total = items.reduce((sum, x) => sum + Math.max(0, x.weight), 0);
   let cursor = Math.random() * total;
-  for (const x of items) {
-    cursor -= Math.max(0, x.weight);
-    if (cursor <= 0) return x.item;
-  }
+  for (const x of items) { cursor -= Math.max(0, x.weight); if (cursor <= 0) return x.item; }
   return items[items.length - 1].item;
 };
 const json = (v: unknown) => JSON.stringify(v);
@@ -35,6 +32,7 @@ const BYPASS_USE_TYPE = "FORTUNE_BYPASS_USE";
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const BYPASS_WINDOW_MS = 5 * 60 * 60 * 1000;
 const BYPASS_LIMIT = 10;
+const DEPOSIT_PROMO_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 
 async function getCooldown(userId: string) {
   const last = await prisma.operation.findFirst({ where: { userId, type: "FORTUNE_SPIN" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
@@ -47,12 +45,7 @@ async function getCooldown(userId: string) {
 async function findBypassCode(code: string) {
   const rows = await prisma.operation.findMany({ where: { type: BYPASS_TYPE, status: "ACTIVE" }, orderBy: { createdAt: "desc" }, take: 1000, select: { id: true, label: true, createdAt: true } });
   const now = Date.now();
-  for (const row of rows) {
-    try {
-      const data = JSON.parse(row.label || "{}") as { code?: string; expiresAt?: string; oneUsePerAccount?: boolean };
-      if (data.code === code && data.expiresAt && new Date(data.expiresAt).getTime() > now) return { row, data };
-    } catch {}
-  }
+  for (const row of rows) { try { const data = JSON.parse(row.label || "{}") as { code?: string; expiresAt?: string; oneUsePerAccount?: boolean }; if (data.code === code && data.expiresAt && new Date(data.expiresAt).getTime() > now) return { row, data }; } catch {} }
   return null;
 }
 
@@ -71,12 +64,10 @@ async function createUniquePromo(userId: string, percent: number) {
     const code = Array.from({ length: 6 }, () => PROMO_ALPHABET[Math.floor(Math.random() * PROMO_ALPHABET.length)]).join("");
     try {
       return await prisma.promoCode.create({
-        data: { code, type: "DEPOSIT", depositPercent: percent, ownerId: userId, inventorySaved: false, maxActivations: 1, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), createdById: userId },
+        data: { code, type: "DEPOSIT", depositPercent: percent, ownerId: userId, inventorySaved: false, maxActivations: 1, expiresAt: new Date(Date.now() + DEPOSIT_PROMO_TTL_MS), createdById: userId },
         select: { id: true, code: true, type: true, depositPercent: true, expiresAt: true },
       });
-    } catch (error) {
-      if (attempt === 9) throw error;
-    }
+    } catch (error) { if (attempt === 9) throw error; }
   }
   throw new Error("PROMO_GENERATION_FAILED");
 }
@@ -84,24 +75,13 @@ async function createUniquePromo(userId: string, percent: number) {
 async function getLetterState(userId: string) {
   const spins = await prisma.operation.findMany({ where: { userId, type: "FORTUNE_SPIN" }, select: { label: true }, orderBy: { createdAt: "desc" }, take: 200 });
   const collected = new Set<LetterSlot>();
-  for (const spin of spins) {
-    try { const data = JSON.parse(spin.label || "{}") as { metadata?: { slotId?: string } }; const slot = data.metadata?.slotId; if (letterSlots.includes(slot as LetterSlot)) collected.add(slot as LetterSlot); } catch {}
-  }
+  for (const spin of spins) { try { const data = JSON.parse(spin.label || "{}") as { metadata?: { slotId?: string } }; const slot = data.metadata?.slotId; if (letterSlots.includes(slot as LetterSlot)) collected.add(slot as LetterSlot); } catch {} }
   const result = letterSlots.filter((slot) => collected.has(slot));
   return { collected: result, completed: result.length === letterSlots.length };
 }
 
-async function getCases() {
-  return prisma.case.findMany({ where: { isActive: true, environment: "SYSTEM" }, select: { id: true, slug: true, name: true, image: true, price: true }, orderBy: { price: "asc" } });
-}
-
-function getFreeCaseRoulette(cases: Awaited<ReturnType<typeof getCases>>) {
-  if (!cases.length) return null;
-  const sorted = [...cases].sort((a, b) => a.price - b.price);
-  const indexes = new Set<number>(); indexes.add(0); indexes.add(Math.floor((sorted.length - 1) / 2)); if (sorted.length > 3) indexes.add(sorted.length - 2); else indexes.add(sorted.length - 1);
-  const selected = [...indexes].sort((a, b) => a - b).map((index) => sorted[index]);
-  return selected.filter((item, index, arr) => index === arr.findIndex((x) => x.id === item.id)).slice(0, 3);
-}
+async function getCases() { return prisma.case.findMany({ where: { isActive: true, environment: "SYSTEM" }, select: { id: true, slug: true, name: true, image: true, price: true }, orderBy: { price: "asc" } }); }
+function getFreeCaseRoulette(cases: Awaited<ReturnType<typeof getCases>>) { if (!cases.length) return null; const sorted = [...cases].sort((a, b) => a.price - b.price); const indexes = new Set<number>(); indexes.add(0); indexes.add(Math.floor((sorted.length - 1) / 2)); if (sorted.length > 3) indexes.add(sorted.length - 2); else indexes.add(sorted.length - 1); const selected = [...indexes].sort((a, b) => a - b).map((index) => sorted[index]); return selected.filter((item, index, arr) => index === arr.findIndex((x) => x.id === item.id)).slice(0, 3); }
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -123,17 +103,9 @@ export async function POST(request: Request) {
   const cooldown = await getCooldown(user.id);
   if (!cooldown.available) {
     if (!bypassCode) return NextResponse.json({ error: "Барабан доступен снова через 24 часа.", code: "FORTUNE_COOLDOWN", cooldown }, { status: 429 });
-    try { await consumeBypassCode(user.id, bypassCode); } catch (error) {
-      const code = error instanceof Error ? error.message : "INVALID_BYPASS_CODE";
-      const messages: Record<string, string> = { INVALID_BYPASS_CODE: "Промокод для обхода лимита недействителен или истёк.", BYPASS_ALREADY_USED: "Этот промокод уже использован на вашем аккаунте.", BYPASS_RATE_LIMIT: "Можно использовать не более 10 таких промокодов за 5 часов." };
-      return NextResponse.json({ error: messages[code] ?? "Не удалось применить промокод.", code, cooldown }, { status: 400 });
-    }
+    try { await consumeBypassCode(user.id, bypassCode); } catch (error) { const code = error instanceof Error ? error.message : "INVALID_BYPASS_CODE"; const messages: Record<string, string> = { INVALID_BYPASS_CODE: "Промокод для обхода лимита недействителен или истёк.", BYPASS_ALREADY_USED: "Этот промокод уже использован на вашем аккаунте.", BYPASS_RATE_LIMIT: "Можно использовать не более 10 таких промокодов за 5 часов." }; return NextResponse.json({ error: messages[code] ?? "Не удалось применить промокод.", code, cooldown }, { status: 400 }); }
   } else if (bypassCode) {
-    try { await consumeBypassCode(user.id, bypassCode); } catch (error) {
-      const code = error instanceof Error ? error.message : "INVALID_BYPASS_CODE";
-      const messages: Record<string, string> = { INVALID_BYPASS_CODE: "Промокод для обхода лимита недействителен или истёк.", BYPASS_ALREADY_USED: "Этот промокод уже использован на вашем аккаунте.", BYPASS_RATE_LIMIT: "Можно использовать не более 10 таких промокодов за 5 часов." };
-      return NextResponse.json({ error: messages[code] ?? "Не удалось применить промокод.", code }, { status: 400 });
-    }
+    try { await consumeBypassCode(user.id, bypassCode); } catch (error) { const code = error instanceof Error ? error.message : "INVALID_BYPASS_CODE"; const messages: Record<string, string> = { INVALID_BYPASS_CODE: "Промокод для обхода лимита недействителен или истёк.", BYPASS_ALREADY_USED: "Этот промокод уже использован на вашем аккаунте.", BYPASS_RATE_LIMIT: "Можно использовать не более 10 таких промокодов за 5 часов." }; return NextResponse.json({ error: messages[code] ?? "Не удалось применить промокод.", code }, { status: 400 }); }
   }
 
   const cases = await getCases();
