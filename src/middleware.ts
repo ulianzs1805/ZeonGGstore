@@ -16,6 +16,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(canonicalUrl, 307);
   }
 
+  // Payment providers must be able to reach their webhook without a beta cookie.
+  // The webhook verifies the provider signature before processing any payment.
+  if (pathname === "/api/deposit/yoomoney/webhook" && request.method === "POST") {
+    return NextResponse.next();
+  }
+
   // Metadata image routes must stay public. Safari requests these routes before
   // a beta session exists; redirecting them to /beta makes Safari receive HTML
   // instead of PNG and it falls back to the Vercel triangle.
