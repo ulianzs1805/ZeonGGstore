@@ -101,10 +101,11 @@ export async function POST(request: Request) {
     });
   } else if (reward.type === "DEPOSIT_BONUS") {
     const selected = weightedPick(depositRewards.map((item) => ({ item, weight: item.weight })));
-    innerRoulette = { items: depositRewards.map((item) => ({ key: String(item.amount), title: `+${item.amount}%`, subtitle: "к пополнению", image: "/bonuses/IMG_9364.jpeg" })), selectedIndex: depositRewards.findIndex((item) => item.amount === selected.amount), title: "Бонус на депозит" };
+    // Deposit roulette intentionally uses text-only cells: no duplicated bonus PNG inside the reel.
+    innerRoulette = { items: depositRewards.map((item) => ({ key: String(item.amount), title: `+${item.amount}%`, subtitle: "к пополнению" })), selectedIndex: depositRewards.findIndex((item) => item.amount === selected.amount), title: "Бонус на депозит" };
     rewardValue = selected.amount;
     label = `Депозитный бонус: +${selected.amount}%`;
-    metadata = { bonusType: reward.type, percent: selected.amount, onDeposit: true, chanceWeight: selected.weight, image: "/bonuses/IMG_9364.jpeg" };
+    metadata = { bonusType: reward.type, percent: selected.amount, onDeposit: true, chanceWeight: selected.weight };
   } else if (reward.type === "FREE_CASE") {
     if (!cases.length) return NextResponse.json({ error: "Сейчас нет доступных кейсов." }, { status: 409 });
     const rouletteCases = getFreeCaseRoulette(cases);
