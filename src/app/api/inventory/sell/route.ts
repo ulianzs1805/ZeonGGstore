@@ -1,18 +1,66 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
-function isValidPrice(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value > 0; }
+function isValidPrice(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+async function calculateSellAll(transaction: Prisma.TransactionClient, userId: string) {
+  const items = await transaction.inventoryItem.findMany({ where: { userId, soldAt: null } });
+  if (!items.length) throw new Error("NO_ITEMS");
+
+  let credited = 0;
+  const itemIds: string[] = [];
+
+  for (const item of items) {
+    const withdrawal = await transaction.operation.findFirst({
+      where: {
+        userId,
+        itemId: item.id,
+        type: "WITHDRAWAL",
+        status: { in: ["PENDING", "PROCESSING"] },
+      },
+      select: { id: true },
+    });
+    if (withdrawal) throw new Error("WITHDRAWAL_EXISTS");
+
+    const canonicalDrop = await transaction.drop.findFirst({
+      where: { id: item.itemId },
+      select: { price: true },
+    });
+    const salePrice = canonicalDrop && isValidPrice(canonicalDrop.price) ? canonicalDrop.price : item.price;
+    if (!isValidPrice(salePrice)) throw new Error("INVALID_ITEM_PRICE");
+
+    const creditAmount = Math.max(0, Math.round(salePrice));
+    if (creditAmount <= 0) throw new Error("INVALID_ITEM_PRICE");
+
+    credited += creditAmount;
+    itemIds.push(item.id);
+  }
+
+  return { credited, count: itemIds.length, itemIds };
+}
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Необходим вход" }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   const inventoryItemId = body && typeof body.inventoryItemId === "string" ? body.inventoryItemId : "";
   const sellAll = body?.sellAll === true;
+  const preview = body?.preview === true;
+
   if (!inventoryItemId && !sellAll) return NextResponse.json({ error: "Не указан предмет" }, { status: 400 });
+  if (preview && !sellAll) return NextResponse.json({ error: "Предпросмотр доступен только для продажи всего инвентаря" }, { status: 400 });
 
   try {
+    if (preview) {
+      const result = await prisma.$transaction((transaction) => calculateSellAll(transaction, user.id));
+      return NextResponse.json(result);
+    }
+
     const result = await prisma.$transaction(async (transaction) => {
       const items = sellAll
         ? await transaction.inventoryItem.findMany({ where: { userId: user.id, soldAt: null } })
