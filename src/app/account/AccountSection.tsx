@@ -48,21 +48,34 @@ export default function AccountSection({ section }: { section: Section }) {
       if (!response.ok) throw new Error(result?.error || "Не удалось продать предмет");
       await refresh();
       window.dispatchEvent(new Event("zeon-profile-updated"));
-    } catch (sellError) {
-      setError(sellError instanceof Error ? sellError.message : "Не удалось продать предмет");
-    } finally {
-      setSellingId(null);
-    }
+    } catch (sellError) { setError(sellError instanceof Error ? sellError.message : "Не удалось продать предмет"); }
+    finally { setSellingId(null); }
   }, [refresh]);
+
+  const sellAll = useCallback(async () => {
+    if (!data?.inventory.length || sellingId) return;
+    const count = data.inventory.length;
+    const total = data.inventory.reduce((sum, item) => sum + Math.max(0, Math.round(item.price)), 0);
+    const confirmed = window.confirm(`ВНИМАНИЕ!\n\nБудет продано ${count} ${count === 1 ? "предмет" : count < 5 ? "предмета" : "предметов"} на сумму примерно ${total} Z-Coin.\n\nЭти скины будут удалены из инвентаря НАВСЕГДА. После продажи вернуть их или вывести уже не получится.\n\nПродолжить?`);
+    if (!confirmed) return;
+    setSellingId("__all__");
+    setError("");
+    try {
+      const response = await fetch("/api/inventory/sell", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sellAll: true }) });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "Не удалось продать предметы");
+      await refresh();
+      window.dispatchEvent(new Event("zeon-profile-updated"));
+    } catch (sellError) { setError(sellError instanceof Error ? sellError.message : "Не удалось продать предметы"); }
+    finally { setSellingId(null); }
+  }, [data?.inventory, refresh, sellingId]);
 
   const resetBetaAccess = useCallback(async () => {
     try {
       const response = await fetch("/api/beta", { method: "DELETE" });
       if (!response.ok) throw new Error("Не удалось сбросить Beta-доступ");
       window.location.href = "/beta";
-    } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : "Не удалось сбросить Beta-доступ");
-    }
+    } catch (resetError) { setError(resetError instanceof Error ? resetError.message : "Не удалось сбросить Beta-доступ"); }
   }, []);
 
   const bestDrop = useMemo(() => data?.inventory.reduce<InventoryItem | null>((best, item) => !best || item.price > best.price ? item : best, null) ?? null, [data?.inventory]);
@@ -73,7 +86,7 @@ export default function AccountSection({ section }: { section: Section }) {
 
   return <AccountShell active={section} title={title} user={data.user}>
     {error && <div className="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
-    {section === "inventory" && <InventorySection items={data.inventory} sellingId={sellingId} onSell={(item) => void sell(item)} />}
+    {section === "inventory" && <InventorySection items={data.inventory} sellingId={sellingId} onSell={(item) => void sell(item)} onSellAll={() => void sellAll()} />}
     {section === "transactions" && <TransactionsSection transactions={data.transactions} />}
     {section === "statistics" && <StatisticsSection statistics={statistics} bestDrop={bestDrop} />}
     {section === "settings" && <SettingsSection user={data.user} onResetBeta={() => void resetBetaAccess()} />}
