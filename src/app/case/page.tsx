@@ -42,9 +42,16 @@ export default function CasePage() {
   const [freeOpenAvailable, setFreeOpenAvailable] = useState(false);
   const [openQuantity, setOpenQuantity] = useState<1 | 2 | 3>(1);
   const catalogRef = useRef<CatalogCase[]>([]);
+  const animationRequestsRef = useRef<(RouletteAnimationRequest | null)[]>([]);
+  const rouletteSlotsRef = useRef<CaseItem[][]>([]);
+  const winnersRef = useRef<(CaseItem | null)[]>([]);
   const activeCase = catalog.find(item => item.slug === selectedCaseId || item.id === selectedCaseId) ?? null;
   const caseSkins: CaseItem[] = activeCase?.drops.map(drop => ({ id: drop.id, name: drop.name, rarity: drop.rarity, color: getRarityTextClass(drop.rarity), image: drop.image, price: drop.price, chance: drop.probability, caseId: activeCase.slug, caseImage: activeCase.image })) ?? [];
   const totalPrice = (activeCase?.price ?? 0) * openQuantity;
+
+  useEffect(() => { animationRequestsRef.current = animationRequests; }, [animationRequests]);
+  useEffect(() => { rouletteSlotsRef.current = rouletteSlots; }, [rouletteSlots]);
+  useEffect(() => { winnersRef.current = winners.map(item => item ?? null); }, [winners]);
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("caseId");
@@ -82,37 +89,37 @@ export default function CasePage() {
     if (!activeCase || !caseSkins.length || rouletteSlots.length || opening || animating || resultVisible) return;
     const preview = buildRouletteSlots(caseSkins);
     if (!preview.slots.length) return;
-    setWinnerIndices([null]);
-    setRevealWinners([false]);
-    setRouletteSlots([preview.slots]);
-    setAnimationRequests([null]);
-  }, [activeCase, caseSkins, rouletteSlots.length, opening, animating, resultVisible]);
+    setWinnerIndices(Array(openQuantity).fill(null));
+    setRevealWinners(Array(openQuantity).fill(false));
+    setRouletteSlots(Array.from({ length: openQuantity }, () => [...preview.slots]));
+    setAnimationRequests(Array(openQuantity).fill(null));
+    winnersRef.current = Array(openQuantity).fill(null);
+  }, [activeCase, caseSkins, rouletteSlots.length, opening, animating, resultVisible, openQuantity]);
 
-  const finishRoll = (requestId: string) => {
-    const rouletteIndex = animationRequests.findIndex(request => request?.id === requestId);
-    if (rouletteIndex < 0) return;
-    const request = animationRequests[rouletteIndex];
-    if (!request) return;
-    const slots = rouletteSlots[rouletteIndex] ?? [];
+  const finishRoll = (rouletteIndex: number, requestId: string) => {
+    const currentRequests = animationRequestsRef.current;
+    const request = currentRequests[rouletteIndex];
+    if (!request || request.id !== requestId) return;
+    const slots = rouletteSlotsRef.current[rouletteIndex] ?? [];
     const index = request.winnerIndex;
     if (index === undefined || index === null || !slots[index]) return;
+
     const rollWinner = slots[index];
-    const nextReveal = [...revealWinners];
-    const nextIndices = [...winnerIndices];
-    const nextRequests = [...animationRequests];
-    nextReveal[rouletteIndex] = true;
-    nextIndices[rouletteIndex] = index;
+    const nextRequests = [...currentRequests];
     nextRequests[rouletteIndex] = null;
-    setRevealWinners(nextReveal);
-    setWinnerIndices(nextIndices);
+    animationRequestsRef.current = nextRequests;
     setAnimationRequests(nextRequests);
 
-    const nextWinners = [...winners];
-    nextWinners[rouletteIndex] = rollWinner;
-    setWinners(nextWinners);
+    setWinnerIndices(current => { const next = [...current]; next[rouletteIndex] = index; return next; });
+    setRevealWinners(current => { const next = [...current]; next[rouletteIndex] = true; return next; });
 
-    if (nextWinners.filter(Boolean).length !== openQuantity) return;
-    const resolvedWinners = nextWinners.filter(Boolean) as CaseItem[];
+    const nextWinners = [...winnersRef.current];
+    nextWinners[rouletteIndex] = rollWinner;
+    winnersRef.current = nextWinners;
+    setWinners(nextWinners.filter(Boolean) as CaseItem[]);
+
+    if (!nextWinners.every(Boolean)) return;
+    const resolvedWinners = nextWinners as CaseItem[];
     setWinner(resolvedWinners[0] ?? null);
     setWinners(resolvedWinners);
     setResultVisible(true);
@@ -151,9 +158,11 @@ export default function CasePage() {
     setRevealWinners(Array(openQuantity).fill(false));
     setWinnerIndices(Array(openQuantity).fill(null));
     setWinner(null);
+    winnersRef.current = Array(openQuantity).fill(null);
     setWinners([]);
     setResultAction(null);
     setAnimating(false);
+    animationRequestsRef.current = Array(openQuantity).fill(null);
     setAnimationRequests(Array(openQuantity).fill(null));
     setResetToken(value => value + 1);
 
@@ -173,6 +182,7 @@ export default function CasePage() {
       const nextRouletteSlots: CaseItem[][] = [];
       const nextRequests: (RouletteAnimationRequest | null)[] = [];
       const nextIndices: (number | null)[] = [];
+      const immediateWinners: (CaseItem | null)[] = [];
       for (let index = 0; index < openQuantity; index += 1) {
         const serverDrop = serverDrops[index] as CatalogDrop;
         const rollWinner: CaseItem = {
@@ -193,20 +203,27 @@ export default function CasePage() {
           nextRouletteSlots.push([rollWinner]);
           nextIndices.push(0);
           nextRequests.push(null);
+          immediateWinners.push(rollWinner);
           continue;
         }
         nextRouletteSlots.push(track.slots);
         nextIndices.push(track.winnerSlotIndex);
         nextRequests.push({ id: crypto.randomUUID(), winnerIndex: track.winnerSlotIndex });
+        immediateWinners.push(null);
       }
 
+      rouletteSlotsRef.current = nextRouletteSlots;
+      animationRequestsRef.current = nextRequests;
+      winnersRef.current = immediateWinners;
       setWinnerIndices(nextIndices);
       setRouletteSlots(nextRouletteSlots);
       setAnimationRequests(nextRequests);
-      const immediateWinners = nextRouletteSlots.map((slots, index) => nextRequests[index] ? null : slots[nextIndices[index] ?? 0]).filter(Boolean) as CaseItem[];
-      if (immediateWinners.length === openQuantity) {
-        setWinners(immediateWinners);
-        setWinner(immediateWinners[0] ?? null);
+      if (immediateWinners.some(Boolean)) setWinners(immediateWinners.filter(Boolean) as CaseItem[]);
+
+      if (immediateWinners.every(Boolean)) {
+        const resolved = immediateWinners as CaseItem[];
+        setWinners(resolved);
+        setWinner(resolved[0] ?? null);
         setRevealWinners(Array(openQuantity).fill(true));
         setResultVisible(true);
         setOpening(false);
@@ -216,6 +233,7 @@ export default function CasePage() {
     } catch (error) {
       setOpening(false);
       setAnimating(false);
+      animationRequestsRef.current = [];
       setAnimationRequests([]);
       setOpenError(error instanceof Error ? error.message : "Не удалось открыть кейс");
     }
@@ -228,9 +246,11 @@ export default function CasePage() {
       setResultClosing(false);
       setWinner(null);
       setWinners([]);
+      winnersRef.current = [];
       setRevealWinners([]);
       setWinnerIndices([]);
       setResultAction(null);
+      animationRequestsRef.current = [];
       setAnimationRequests([]);
       setResetToken(value => value + 1);
       setRouletteSlots([]);
@@ -261,9 +281,11 @@ export default function CasePage() {
     setResultVisible(false);
     setWinner(null);
     setWinners([]);
+    winnersRef.current = [];
     setRevealWinners([]);
     setWinnerIndices([]);
     setResultAction(null);
+    animationRequestsRef.current = [];
     setAnimationRequests([]);
     setResetToken(value => value + 1);
     requestAnimationFrame(() => void startCaseRoll());
@@ -278,5 +300,5 @@ export default function CasePage() {
   }, [winners, resultVisible]);
 
   const activeCaseName = activeCase?.name ?? "Загрузка кейса...";
-  return <main className="relative min-h-screen overflow-hidden bg-[#05070b] px-4 py-6 text-white sm:px-6 sm:py-10"><div className="pointer-events-none absolute inset-0 overflow-hidden"><div className="absolute left-1/2 top-16 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-purple-700/10 blur-[130px]" /></div><div className="relative mx-auto max-w-6xl"><div className="mb-6 flex items-center justify-between gap-4 sm:mb-10"><Link href="/" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-4 py-2 text-sm font-semibold text-gray-200">← Назад</Link></div><div className="text-center"><div className="flex items-center justify-center gap-2"><p className="text-[11px] font-black uppercase tracking-[0.42em] text-yellow-300">ZEONGGSTORE</p><HelpTip text="Здесь находится выбранный кейс. Внутри указаны доступные предметы, их редкость, стоимость и шанс выпадения." label="Что такое кейс?" /></div><h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-5xl">{activeCaseName}</h1><div className="mx-auto mt-3 flex max-w-2xl items-center justify-center gap-2 text-sm leading-6 text-slate-400 sm:text-base"><span>Открой кейс, прокрути рулетку и получи один или несколько предметов.</span><HelpTip text="Количество открытий выбирается под рулетками. При 2× или 3× стоимость кейса умножается на выбранное количество." label="Как работает мульти-открытие?" /></div></div><div className="mt-8 sm:mt-10"><RecentDropsStrip title="Последние дропы" /></div><BestDrop bestDrop={bestDrop} /><section className="mt-8 sm:mt-10"><div className="rounded-[28px] border border-purple-300/10 bg-[radial-gradient(circle_at_center,rgba(109,40,217,0.16),rgba(7,9,14,0.96)_62%)] p-5 shadow-[0_30px_100px_rgba(0,0,0,0.45)] sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Кейс</p><HelpTip text="Изображение кейса здесь больше не используется — основной акцент страницы сделан на рулетке, шансах и самом открытии." label="Зачем убрана картинка кейса?" /></div><p className="mt-2 text-2xl font-black text-white sm:text-3xl">{activeCaseName}</p></div><div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-right"><p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Предметов</p><p className="mt-1 text-xl font-black text-white">{caseSkins.length}</p></div></div></div></section><section className="mt-8 sm:mt-10"><div className="mb-3 flex items-center justify-between gap-4 px-1"><div className="flex items-center gap-2"><p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Рулетка{openQuantity > 1 ? ` ×${openQuantity}` : ""}</p><HelpTip text="При мульти-открытии рулетки располагаются вертикально. Каждая рулетка показывает отдельный серверный результат." label="Как работают рулетки?" /></div><span className="hidden text-xs font-semibold text-slate-500 sm:block">Указатель всегда стоит по центру</span></div><div className="space-y-3">{rouletteSlots.map((slots, index) => <div key={index} className={openQuantity > 1 ? "origin-top scale-[0.92] -mb-2" : ""}><CaseRoulette slots={slots} winnerIndex={winnerIndices[index] ?? null} revealWinner={revealWinners[index] ?? false} request={animationRequests[index] ?? null} resetToken={resetToken} onAnimatingChange={() => undefined} onFinished={finishRoll} /></div>)}</div></section>{!resultVisible && <section className="mt-6 text-center sm:mt-8"><div className="mb-4 flex items-center justify-center gap-2"><button type="button" onClick={() => !opening && !animating && setOpenQuantity(1)} disabled={opening || animating} className={["rounded-xl border px-4 py-2 text-sm font-black transition-all", openQuantity === 1 ? "border-yellow-300/70 bg-yellow-400/15 text-yellow-200 shadow-[0_0_22px_rgba(250,204,21,0.18)]" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-white/20"].join(" ")}>1×</button><button type="button" onClick={() => !opening && !animating && setOpenQuantity(2)} disabled={opening || animating} className={["rounded-xl border px-4 py-2 text-sm font-black transition-all", openQuantity === 2 ? "border-yellow-300/70 bg-yellow-400/15 text-yellow-200 shadow-[0_0_22px_rgba(250,204,21,0.18)]" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-white/20"].join(" ")}>2×</button><button type="button" onClick={() => !opening && !animating && setOpenQuantity(3)} disabled={opening || animating} className={["rounded-xl border px-4 py-2 text-sm font-black transition-all", openQuantity === 3 ? "border-yellow-300/70 bg-yellow-400/15 text-yellow-200 shadow-[0_0_22px_rgba(250,204,21,0.18)]" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-white/20"].join(" ")}>3×</button></div>{openError && <p className="mx-auto mt-4 max-w-xl text-sm font-semibold text-red-300">{openError}</p>}{freeOpenAvailable && <div className="mt-4 flex items-center justify-center gap-2 text-sm font-bold text-emerald-300"><span>Промокод активен: этот кейс можно открыть бесплатно.</span><HelpTip text="Бесплатное открытие доступно только для 1×. При 2× и 3× оплачивается полная стоимость выбранного количества кейсов." label="Что значит бесплатно?" /></div>}<div className="mt-5 flex flex-col items-center justify-center gap-2"><button type="button" onClick={() => void startCaseRoll()} disabled={opening || animating} className="group relative min-w-[250px] overflow-hidden rounded-2xl bg-gradient-to-b from-yellow-200 to-amber-400 px-10 py-5 text-lg font-black text-[#17120a] shadow-[0_0_36px_rgba(250,204,21,0.22)] disabled:cursor-wait disabled:opacity-70"><span className="relative">{opening || animating ? "Открываем..." : freeOpenAvailable ? "Открыть бесплатно" : `Открыть ${openQuantity}× за ${totalPrice} Z Coin`}</span></button><HelpTip text="Сумма автоматически умножается на выбранное количество открытий. Сервер проверяет и списывает именно эту сумму." label="Что делает кнопка открытия?" /></div></section>}{resultVisible && winners.length === 1 && winner && <WinnerModal winner={winner} resultClosing={resultClosing} resultAction={resultAction} onAction={handleResultAction} onOpenAgain={handleOpenAgain} />}{resultVisible && winners.length > 1 && <MultiWinnerModal winners={winners} resultClosing={resultClosing} onClose={closeResult} onOpenAgain={handleOpenAgain} />}<section className="mt-10"><CaseDropList drops={caseSkins} expandedId={expandedChanceCardId} onToggle={setExpandedChanceCardId} /></section></div></main>;
+  return <main className="relative min-h-screen overflow-hidden bg-[#05070b] px-4 py-6 text-white sm:px-6 sm:py-10"><div className="pointer-events-none absolute inset-0 overflow-hidden"><div className="absolute left-1/2 top-16 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-purple-700/10 blur-[130px]" /></div><div className="relative mx-auto max-w-6xl"><div className="mb-6 flex items-center justify-between gap-4 sm:mb-10"><Link href="/" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-4 py-2 text-sm font-semibold text-gray-200">← Назад</Link></div><div className="text-center"><div className="flex items-center justify-center gap-2"><p className="text-[11px] font-black uppercase tracking-[0.42em] text-yellow-300">ZEONGGSTORE</p><HelpTip text="Здесь находится выбранный кейс. Внутри указаны доступные предметы, их редкость, стоимость и шанс выпадения." label="Что такое кейс?" /></div><h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-5xl">{activeCaseName}</h1><div className="mx-auto mt-3 flex max-w-2xl items-center justify-center gap-2 text-sm leading-6 text-slate-400 sm:text-base"><span>Открой кейс, прокрути рулетку и получи один или несколько предметов.</span><HelpTip text="Количество открытий выбирается под рулетками. При 2× или 3× стоимость кейса умножается на выбранное количество кейсов." label="Как работает мульти-открытие?" /></div></div><div className="mt-8 sm:mt-10"><RecentDropsStrip title="Последние дропы" /></div><BestDrop bestDrop={bestDrop} /><section className="mt-8 sm:mt-10"><div className="rounded-[28px] border border-purple-300/10 bg-[radial-gradient(circle_at_center,rgba(109,40,217,0.16),rgba(7,9,14,0.96)_62%)] p-5 shadow-[0_30px_100px_rgba(0,0,0,0.45)] sm:p-8"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Кейс</p><HelpTip text="Изображение кейса здесь больше не используется — основной акцент страницы сделан на рулетке, шансах и самом открытии." label="Зачем убрана картинка кейса?" /></div><p className="mt-2 text-2xl font-black text-white sm:text-3xl">{activeCaseName}</p></div><div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-right"><p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Предметов</p><p className="mt-1 text-xl font-black text-white">{caseSkins.length}</p></div></div></div></section><section className="mt-8 sm:mt-10"><div className="mb-3 flex items-center justify-between gap-4 px-1"><div className="flex items-center gap-2"><p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-500">Рулетка{openQuantity > 1 ? ` ×${openQuantity}` : ""}</p><HelpTip text="При мульти-открытии рулетки располагаются вертикально. Каждая рулетка показывает отдельный серверный результат." label="Как работают рулетки?" /></div><span className="hidden text-xs font-semibold text-slate-500 sm:block">Указатель всегда стоит по центру</span></div><div className="space-y-3">{rouletteSlots.map((slots, index) => <div key={index} className={openQuantity > 1 ? "origin-top scale-[0.92] -mb-2" : ""}><CaseRoulette slots={slots} winnerIndex={winnerIndices[index] ?? null} revealWinner={revealWinners[index] ?? false} request={animationRequests[index] ?? null} resetToken={resetToken} onAnimatingChange={() => undefined} onFinished={(requestId) => finishRoll(index, requestId)} /></div>)}</div></section>{!resultVisible && <section className="mt-6 text-center sm:mt-8"><div className="mb-4 flex items-center justify-center gap-2"><button type="button" onClick={() => !opening && !animating && setOpenQuantity(1)} disabled={opening || animating} className={["rounded-xl border px-4 py-2 text-sm font-black transition-all", openQuantity === 1 ? "border-yellow-300/70 bg-yellow-400/15 text-yellow-200 shadow-[0_0_22px_rgba(250,204,21,0.18)]" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-white/20"].join(" ")}>1×</button><button type="button" onClick={() => !opening && !animating && setOpenQuantity(2)} disabled={opening || animating} className={["rounded-xl border px-4 py-2 text-sm font-black transition-all", openQuantity === 2 ? "border-yellow-300/70 bg-yellow-400/15 text-yellow-200 shadow-[0_0_22px_rgba(250,204,21,0.18)]" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-white/20"].join(" ")}>2×</button><button type="button" onClick={() => !opening && !animating && setOpenQuantity(3)} disabled={opening || animating} className={["rounded-xl border px-4 py-2 text-sm font-black transition-all", openQuantity === 3 ? "border-yellow-300/70 bg-yellow-400/15 text-yellow-200 shadow-[0_0_22px_rgba(250,204,21,0.18)]" : "border-white/10 bg-white/[0.035] text-slate-300 hover:border-white/20"].join(" ")}>3×</button></div>{openError && <p className="mx-auto mt-4 max-w-xl text-sm font-semibold text-red-300">{openError}</p>}{freeOpenAvailable && <div className="mt-4 flex items-center justify-center gap-2 text-sm font-bold text-emerald-300"><span>Промокод активен: этот кейс можно открыть бесплатно.</span><HelpTip text="Бесплатное открытие доступно только для 1×. При 2× и 3× оплачивается полная стоимость выбранного количества кейсов." label="Что значит бесплатно?" /></div>}<div className="mt-5 flex flex-col items-center justify-center gap-2"><button type="button" onClick={() => void startCaseRoll()} disabled={opening || animating} className="group relative min-w-[250px] overflow-hidden rounded-2xl bg-gradient-to-b from-yellow-200 to-amber-400 px-10 py-5 text-lg font-black text-[#17120a] shadow-[0_0_36px_rgba(250,204,21,0.22)] disabled:cursor-wait disabled:opacity-70"><span className="relative">{opening || animating ? "Открываем..." : freeOpenAvailable ? "Открыть бесплатно" : `Открыть ${openQuantity}× за ${totalPrice} Z Coin`}</span></button><HelpTip text="Сумма автоматически умножается на выбранное количество открытий. Сервер проверяет и списывает именно эту сумму." label="Что делает кнопка открытия?" /></div></section>}{resultVisible && winners.length === 1 && winner && <WinnerModal winner={winner} resultClosing={resultClosing} resultAction={resultAction} onAction={handleResultAction} onOpenAgain={handleOpenAgain} />}{resultVisible && winners.length > 1 && <MultiWinnerModal winners={winners} resultClosing={resultClosing} onClose={closeResult} onOpenAgain={handleOpenAgain} />}<section className="mt-10"><CaseDropList drops={caseSkins} expandedId={expandedChanceCardId} onToggle={setExpandedChanceCardId} /></section></div></main>;
 }
