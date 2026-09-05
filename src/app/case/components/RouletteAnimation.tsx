@@ -96,7 +96,10 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
       void wheel.offsetWidth;
       activeAnimationRef.current = request.id;
 
-      const target = Math.max(0, index * CARD_STEP + CARD_WIDTH / 2 - viewport.clientWidth / 2);
+      const target = Math.max(
+        0,
+        index * CARD_STEP + CARD_WIDTH / 2 - viewport.clientWidth / 2,
+      );
       let finished = false;
       const finish = () => {
         if (finished || cancelled || generationRef.current !== generation || activeAnimationRef.current !== request.id) return;
@@ -119,7 +122,9 @@ const RouletteAnimation = forwardRef<RouletteAnimationHandle, Props>(function Ro
         if (cancelled || generationRef.current !== generation || activeAnimationRef.current !== request.id || finished) return;
         wheel.style.transition = "transform 4300ms cubic-bezier(0.12, 0.78, 0.16, 1)";
         wheel.style.transform = `translate3d(-${target}px,0,0)`;
-        fallbackRef.current = window.setTimeout(finish, 4800);
+        // Every roulette owns its own completion timer. transitionend is only a fast path;
+        // the timer guarantees that one roulette can never wait for another one to finish.
+        fallbackRef.current = window.setTimeout(finish, 4450);
       });
     };
 
