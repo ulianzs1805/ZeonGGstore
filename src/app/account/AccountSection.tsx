@@ -54,13 +54,20 @@ export default function AccountSection({ section }: { section: Section }) {
 
   const sellAll = useCallback(async () => {
     if (!data?.inventory.length || sellingId) return;
-    const count = data.inventory.length;
-    const total = data.inventory.reduce((sum, item) => sum + Math.max(0, Math.round(item.price)), 0);
-    const confirmed = window.confirm(`ВНИМАНИЕ!\n\nБудет продано ${count} ${count === 1 ? "предмет" : count < 5 ? "предмета" : "предметов"} на сумму ${total} Z-Coin.\n\nЭти скины будут удалены из инвентаря НАВСЕГДА. После продажи вернуть их или вывести уже не получится.\n\nПродолжить?`);
-    if (!confirmed) return;
     setSellingId("__all__");
     setError("");
     try {
+      const previewResponse = await fetch("/api/inventory/sell", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sellAll: true, preview: true }) });
+      const preview = await previewResponse.json().catch(() => null);
+      if (!previewResponse.ok) throw new Error(preview?.error || "Не удалось рассчитать сумму продажи");
+
+      const count = Number(preview.count) || 0;
+      const total = Number(preview.credited) || 0;
+      if (!count || total <= 0) throw new Error("В инвентаре нет предметов для продажи");
+
+      const confirmed = window.confirm(`ВНИМАНИЕ!\n\nБудет продано ${count} ${count === 1 ? "предмет" : count < 5 ? "предмета" : "предметов"} на сумму ${total} Z-Coin.\n\nЭти скины будут удалены из инвентаря НАВСЕГДА. После продажи вернуть их или вывести уже не получится.\n\nПродолжить?`);
+      if (!confirmed) return;
+
       const response = await fetch("/api/inventory/sell", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sellAll: true }) });
       const result = await response.json().catch(() => null);
       if (!response.ok) throw new Error(result?.error || "Не удалось продать предметы");
