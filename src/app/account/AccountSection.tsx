@@ -39,7 +39,7 @@ export default function AccountSection({ section }: { section: Section }) {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const sell = useCallback(async (item: InventoryItem) => {
-    if (!window.confirm(`Продать предмет «${item.name}» за ${item.price} Z-Coin?`)) return;
+    if (!window.confirm(`Продать предмет «${item.name}» за ${Math.max(0, Math.round(item.price))} Z-Coin?`)) return;
     setSellingId(item.id);
     setError("");
     try {
@@ -56,7 +56,7 @@ export default function AccountSection({ section }: { section: Section }) {
     if (!data?.inventory.length || sellingId) return;
     const count = data.inventory.length;
     const total = data.inventory.reduce((sum, item) => sum + Math.max(0, Math.round(item.price)), 0);
-    const confirmed = window.confirm(`ВНИМАНИЕ!\n\nБудет продано ${count} ${count === 1 ? "предмет" : count < 5 ? "предмета" : "предметов"} на сумму примерно ${total} Z-Coin.\n\nЭти скины будут удалены из инвентаря НАВСЕГДА. После продажи вернуть их или вывести уже не получится.\n\nПродолжить?`);
+    const confirmed = window.confirm(`ВНИМАНИЕ!\n\nБудет продано ${count} ${count === 1 ? "предмет" : count < 5 ? "предмета" : "предметов"} на сумму ${total} Z-Coin.\n\nЭти скины будут удалены из инвентаря НАВСЕГДА. После продажи вернуть их или вывести уже не получится.\n\nПродолжить?`);
     if (!confirmed) return;
     setSellingId("__all__");
     setError("");
