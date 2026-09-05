@@ -48,18 +48,30 @@ function DepositContent() {
   useEffect(() => {
     if (!paymentId) return;
     let active = true;
+    let timer: number | undefined;
     const poll = async () => {
-      const response = await fetch(`/api/deposit/status?id=${encodeURIComponent(paymentId)}`, { cache: "no-store" });
-      const data = await response.json().catch(() => ({}));
-      if (!active) return;
-      setStatus(data.status ?? "PENDING");
-      if (data.status === "SUCCESS") setStatusText(`Зачислено ${data.credit} Z-Coin. Баланс обновлён.`);
-      else if (data.status === "CANCELED") setStatusText("Платёж отменён или не был завершён.");
-      else setStatusText("Проверяем подтверждение платежа…");
+      try {
+        const response = await fetch(`/api/deposit/status?id=${encodeURIComponent(paymentId)}&t=${Date.now()}`, { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!active) return;
+        const nextStatus = data.status ?? "PENDING";
+        setStatus(nextStatus);
+        if (nextStatus === "SUCCESS") {
+          setStatusText(`Зачислено ${data.credit} Z-Coin. Баланс обновлён.`);
+          return;
+        }
+        if (nextStatus === "CANCELED") {
+          setStatusText("Платёж отменён или не был завершён.");
+          return;
+        }
+        setStatusText("Проверяем подтверждение платежа…");
+        timer = window.setTimeout(() => void poll(), 1000);
+      } catch {
+        if (active) timer = window.setTimeout(() => void poll(), 1000);
+      }
     };
     void poll();
-    const timer = window.setInterval(() => void poll(), 3000);
-    return () => { active = false; window.clearInterval(timer); };
+    return () => { active = false; if (timer) window.clearTimeout(timer); };
   }, [paymentId]);
   const createPayment = async () => {
     setError("");
