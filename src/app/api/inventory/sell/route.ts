@@ -7,40 +7,62 @@ function isValidPrice(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
-async function calculateSellAll(transaction: Prisma.TransactionClient, userId: string) {
-  const items = await transaction.inventoryItem.findMany({ where: { userId, soldAt: null } });
+type SellAllItem = {
+  id: string;
+  itemId: string;
+  price: number;
+  creditAmount: number;
+};
+
+async function getSellAllItems(transaction: Prisma.TransactionClient, userId: string): Promise<SellAllItem[]> {
+  const items = await transaction.inventoryItem.findMany({
+    where: { userId, soldAt: null },
+    select: { id: true, itemId: true, price: true },
+  });
   if (!items.length) throw new Error("NO_ITEMS");
 
-  let credited = 0;
-  const itemIds: string[] = [];
+  const itemIds = items.map((item) => item.id);
+  const dropIds = [...new Set(items.map((item) => item.itemId))];
 
-  for (const item of items) {
-    const withdrawal = await transaction.operation.findFirst({
+  const [withdrawals, drops] = await Promise.all([
+    transaction.operation.findMany({
       where: {
         userId,
-        itemId: item.id,
+        itemId: { in: itemIds },
         type: "WITHDRAWAL",
         status: { in: ["PENDING", "PROCESSING"] },
       },
-      select: { id: true },
-    });
-    if (withdrawal) throw new Error("WITHDRAWAL_EXISTS");
+      select: { itemId: true },
+    }),
+    transaction.drop.findMany({
+      where: { id: { in: dropIds } },
+      select: { id: true, price: true },
+    }),
+  ]);
 
-    const canonicalDrop = await transaction.drop.findFirst({
-      where: { id: item.itemId },
-      select: { price: true },
-    });
-    const salePrice = canonicalDrop && isValidPrice(canonicalDrop.price) ? canonicalDrop.price : item.price;
+  if (withdrawals.length) throw new Error("WITHDRAWAL_EXISTS");
+
+  const dropsById = new Map(drops.map((drop) => [drop.id, drop.price]));
+
+  return items.map((item) => {
+    const canonicalPrice = dropsById.get(item.itemId);
+    const salePrice = canonicalPrice !== undefined && isValidPrice(canonicalPrice) ? canonicalPrice : item.price;
     if (!isValidPrice(salePrice)) throw new Error("INVALID_ITEM_PRICE");
 
     const creditAmount = Math.max(0, Math.round(salePrice));
     if (creditAmount <= 0) throw new Error("INVALID_ITEM_PRICE");
 
-    credited += creditAmount;
-    itemIds.push(item.id);
-  }
+    return { id: item.id, itemId: item.itemId, price: salePrice, creditAmount };
+  });
+}
 
-  return { credited, count: itemIds.length, itemIds };
+async function calculateSellAll(transaction: Prisma.TransactionClient, userId: string) {
+  const items = await getSellAllItems(transaction, userId);
+  return {
+    credited: items.reduce((sum, item) => sum + item.creditAmount, 0),
+    count: items.length,
+    itemIds: items.map((item) => item.id),
+  };
 }
 
 export async function POST(request: Request) {
@@ -62,40 +84,101 @@ export async function POST(request: Request) {
     }
 
     const result = await prisma.$transaction(async (transaction) => {
-      const items = sellAll
-        ? await transaction.inventoryItem.findMany({ where: { userId: user.id, soldAt: null } })
-        : await transaction.inventoryItem.findMany({ where: { id: inventoryItemId, userId: user.id, soldAt: null } });
+      if (sellAll) {
+        const items = await getSellAllItems(transaction, user.id);
+        const soldAt = new Date();
+        const credited = items.reduce((sum, item) => sum + item.creditAmount, 0);
+        const itemIds = items.map((item) => item.id);
 
-      if (!items.length) throw new Error("NO_ITEMS");
+        const claimed = await transaction.inventoryItem.updateMany({
+          where: { userId: user.id, id: { in: itemIds }, soldAt: null },
+          data: { soldAt },
+        });
+        if (claimed.count !== items.length) throw new Error("ITEM_NOT_AVAILABLE");
 
-      const soldAt = new Date();
-      let credited = 0;
-      const soldIds: string[] = [];
+        await transaction.operation.createMany({
+          data: items.map((item) => ({
+            userId: user.id,
+            type: "ITEM_SALE",
+            itemId: item.id,
+            amount: item.creditAmount,
+            status: "SUCCESS",
+            createdAt: soldAt,
+          })),
+        });
 
-      for (const item of items) {
-        const withdrawal = await transaction.operation.findFirst({ where: { userId: user.id, itemId: item.id, type: "WITHDRAWAL", status: { in: ["PENDING", "PROCESSING"] } }, select: { id: true } });
-        if (withdrawal) throw new Error("WITHDRAWAL_EXISTS");
+        await transaction.transaction.createMany({
+          data: items.map((item) => ({
+            userId: user.id,
+            type: "SALE",
+            zCoinAmount: item.creditAmount,
+            status: "SUCCESS",
+            createdAt: soldAt,
+          })),
+        });
 
-        const canonicalDrop = await transaction.drop.findFirst({ where: { id: item.itemId }, select: { name: true, rarity: true, image: true, price: true } });
-        const salePrice = canonicalDrop && isValidPrice(canonicalDrop.price) ? canonicalDrop.price : item.price;
-        if (!isValidPrice(salePrice)) throw new Error("INVALID_ITEM_PRICE");
-        const creditAmount = Math.max(0, Math.round(salePrice));
-        if (creditAmount <= 0) throw new Error("INVALID_ITEM_PRICE");
+        const updatedUser = await transaction.user.update({
+          where: { id: user.id },
+          data: { balance: { increment: credited } },
+        });
 
-        const claimed = await transaction.inventoryItem.updateMany({ where: { id: item.id, userId: user.id, soldAt: null }, data: { soldAt, ...(canonicalDrop ? { name: canonicalDrop.name, rarity: canonicalDrop.rarity, image: canonicalDrop.image, price: canonicalDrop.price } : {}) } });
-        if (claimed.count !== 1) throw new Error("ITEM_NOT_AVAILABLE");
-
-        credited += creditAmount;
-        soldIds.push(item.id);
-        await transaction.operation.create({ data: { userId: user.id, type: "ITEM_SALE", itemId: item.id, amount: creditAmount, status: "SUCCESS", createdAt: soldAt } });
-        await transaction.transaction.create({ data: { userId: user.id, type: "SALE", zCoinAmount: creditAmount, status: "SUCCESS", createdAt: soldAt } });
+        return { balance: updatedUser.balance, itemIds, credited, count: items.length };
       }
 
-      const updatedUser = await transaction.user.update({ where: { id: user.id }, data: { balance: { increment: credited } } });
-      return { balance: updatedUser.balance, itemIds: soldIds, credited, count: soldIds.length };
+      const item = await transaction.inventoryItem.findFirst({
+        where: { id: inventoryItemId, userId: user.id, soldAt: null },
+      });
+      if (!item) throw new Error("NO_ITEMS");
+
+      const withdrawal = await transaction.operation.findFirst({
+        where: {
+          userId: user.id,
+          itemId: item.id,
+          type: "WITHDRAWAL",
+          status: { in: ["PENDING", "PROCESSING"] },
+        },
+        select: { id: true },
+      });
+      if (withdrawal) throw new Error("WITHDRAWAL_EXISTS");
+
+      const canonicalDrop = await transaction.drop.findFirst({
+        where: { id: item.itemId },
+        select: { name: true, rarity: true, image: true, price: true },
+      });
+      const salePrice = canonicalDrop && isValidPrice(canonicalDrop.price) ? canonicalDrop.price : item.price;
+      if (!isValidPrice(salePrice)) throw new Error("INVALID_ITEM_PRICE");
+      const creditAmount = Math.max(0, Math.round(salePrice));
+      if (creditAmount <= 0) throw new Error("INVALID_ITEM_PRICE");
+
+      const soldAt = new Date();
+      const claimed = await transaction.inventoryItem.updateMany({
+        where: { id: item.id, userId: user.id, soldAt: null },
+        data: {
+          soldAt,
+          ...(canonicalDrop
+            ? { name: canonicalDrop.name, rarity: canonicalDrop.rarity, image: canonicalDrop.image, price: canonicalDrop.price }
+            : {}),
+        },
+      });
+      if (claimed.count !== 1) throw new Error("ITEM_NOT_AVAILABLE");
+
+      await transaction.operation.create({
+        data: { userId: user.id, type: "ITEM_SALE", itemId: item.id, amount: creditAmount, status: "SUCCESS", createdAt: soldAt },
+      });
+      await transaction.transaction.create({
+        data: { userId: user.id, type: "SALE", zCoinAmount: creditAmount, status: "SUCCESS", createdAt: soldAt },
+      });
+
+      const updatedUser = await transaction.user.update({
+        where: { id: user.id },
+        data: { balance: { increment: creditAmount } },
+      });
+      return { balance: updatedUser.balance, itemIds: [item.id], credited: creditAmount, count: 1 };
     });
+
     return NextResponse.json(result);
   } catch (error) {
+    console.error("[inventory/sell] failed", error);
     if (error instanceof Error && error.message === "NO_ITEMS") return NextResponse.json({ error: "В инвентаре нет предметов для продажи" }, { status: 409 });
     if (error instanceof Error && error.message === "ITEM_NOT_AVAILABLE") return NextResponse.json({ error: "Один из предметов уже продан или недоступен" }, { status: 409 });
     if (error instanceof Error && error.message === "WITHDRAWAL_EXISTS") return NextResponse.json({ error: "Нельзя продать всё: у одного из предметов есть активная заявка на вывод" }, { status: 409 });
